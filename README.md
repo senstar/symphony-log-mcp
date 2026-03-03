@@ -1,49 +1,122 @@
 # Symphony Log MCP Server
 
-## Overview
+A Model Context Protocol (MCP) server for automated analysis of Symphony VMS log files. This server provides AI assistants with powerful tools to diagnose errors, compare test runs, track process health, and identify performance issues across Symphony deployments.
 
-Symphony Log MCP Server is a tool for reading, analyzing, and comparing Symphony VMS log files. It provides automated diagnostics for error patterns, process health, service lifecycle, and performance issues across multiple test runs or environments.
+## What is MCP?
+
+[Model Context Protocol](https://modelcontextprotocol.io) is an open standard that enables AI assistants to securely access external tools and data sources. This server implements MCP to give AI assistants specialized capabilities for analyzing Symphony logs.
 
 ## Features
-- Side-by-side log comparison for two builds or environments
-- Error pattern analysis and fingerprinting
-- Process health and crash-loop detection
-- Service lifecycle event tracking
-- Slow request aggregation and performance metrics
-- Heuristic change summary for regression analysis
 
-## Usage
+- **Side-by-side log comparison** - Compare two builds or environments with automatic detection of fixed/new/changed error patterns
+- **Error pattern analysis** - Fingerprint and deduplicate errors, with full stack trace extraction
+- **Process health monitoring** - Detect crash-loops, restarts, and memory trends from sccp logs
+- **Service lifecycle tracking** - Find start/stop/restart events and diagnose restart causes
+- **Slow request analysis** - Aggregate and histogram request duration patterns
+- **HTTP request analysis** - Parse Nancy RequestLogger entries with grouping and rate analysis
+- **Bug report package support** - Automatically extract and analyze multi-server bug report ZIPs
+
+## Installation
 
 ### Prerequisites
-- Node.js (v18 or newer recommended)
-- Access to Symphony log directories (unpacked or zipped)
+- Node.js v18 or newer
+- An MCP-compatible client (Claude Desktop, VS Code with GitHub Copilot, etc.)
 
-### Install
-```
+### Setup
+```bash
+git clone https://github.com/senstar/symphony-log-mcp.git
+cd symphony-log-mcp
 npm install
 npm run build
 ```
 
-### Run Comparison
-```
-node dist/index.js compare_logs --dirA <path/to/logsA> --labelA "Test A" --dirB <path/to/logsB> --labelB "Test B" --include errors,health,lifecycle,slow --summarize true
+## Configuration
+
+### Claude Desktop
+
+Add this server to your Claude Desktop config file:
+
+**MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "symphony-logs": {
+      "command": "node",
+      "args": ["/path/to/symphony-log-mcp/dist/index.js", "C:\\Log"],
+      "env": {
+        "LOG_DIR": "C:\\Log"
+      }
+    }
+  }
+}
 ```
 
-- `dirA`, `dirB`: Paths to log directories for each test/build
-- `labelA`, `labelB`: Human-readable labels for each side
-- `include`: Comma-separated dimensions to compare (errors, health, lifecycle, http, slow)
-- `summarize`: Adds a heuristic summary to the output
+The second argument or `LOG_DIR` environment variable sets the default log directory. You can override this per-tool by using absolute paths in tool parameters.
 
-### Example
-```
-node dist/index.js compare_logs --dirA "Compare/133/Log" --labelA "Test 133" --dirB "Compare/138/Log" --labelB "Test 138" --include errors,health,lifecycle,slow --summarize true
+### VS Code with GitHub Copilot
+
+Add to `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "mcpServers": {
+    "symphony-logs": {
+      "command": "node",
+      "args": ["${workspaceFolder}/tools/symphony-log-mcp/dist/index.js"],
+      "env": {
+        "LOG_DIR": "${workspaceFolder}/Compare"
+      }
+    }
+  }
+}
 ```
 
-## Output
-The tool prints a detailed comparison report to the console, highlighting error counts, fixed/new patterns, process restarts, crash-loops, and performance changes.
+## Usage
+
+Once configured, you can ask your AI assistant natural language questions like:
+
+- "Compare the logs from tests 133 and 138 and summarize the differences"
+- "What are the most common errors in the InfoService logs?"
+- "Show me the process health for this bug report"
+- "Find all slow requests over 5 seconds"
+- "What caused InfoService to restart at 14:23?"
+
+The AI assistant will automatically invoke the appropriate MCP tools and interpret the results for you.
+
+## Available Tools
+
+- `compare_logs` - Side-by-side comparison of two log directories
+- `search_errors` - Find and deduplicate error patterns
+- `search_pattern` - Search for text/regex patterns across logs
+- `get_slow_requests` - Find requests exceeding a duration threshold
+- `get_stack_traces` - Extract exception stack traces
+- `get_service_lifecycle` - Track service start/stop/restart events
+- `get_process_lifetimes` - Analyze process restarts from sccp logs
+- `get_pd_crashes` - Extract native crash dumps from pd logs
+- `search_http_requests` - Parse HTTP request logs with grouping
+- `trace_mb_request` - Trace RPC requests from MobileBridge to InfoService
+- `summarize_health` - Generate process health dashboard
+- `correlate_timelines` - Merge multiple log files chronologically
+- `list_log_files` - List available log files
+- `decode_log_prefix` - Look up log file prefix meanings
+- `describe_bug_report` - Extract bug report package metadata
+
+See the tool descriptions in the MCP client for detailed parameter documentation.
+
+## Direct Invocation (Advanced)
+
+While this server is designed for MCP clients, you can invoke it directly for testing:
+
+```bash
+echo '{"method":"tools/call","params":{"name":"compare_logs","arguments":{"dirA":"C:/Logs/133","dirB":"C:/Logs/138"}}}' | node dist/index.js
+```
 
 ## Contributing
-Pull requests and issues are welcome. Please ensure code is well-documented and tested.
+
+Pull requests welcome! Please ensure code is well-documented and tested.
 
 ## License
+
 MIT

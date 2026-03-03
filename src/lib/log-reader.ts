@@ -1,0 +1,211 @@
+import * as fs from "fs/promises";
+import type { Dirent } from "fs";
+import * as path from "path";
+import { parseLogEntries, type LogEntry } from "./log-parser.js";
+
+export interface LogFileInfo {
+  filename: string;
+  fullPath: string;
+  prefix: string;
+  date: string; // YYMMDD
+  rollover: string; // zero-padded number
+  sizeBytes: number;
+  modifiedAt: Date;
+  /** Set when files are gathered from a bug-report package (server label) */
+  serverLabel?: string;
+}
+
+/** Parse filename like "is-260302_00.txt" */
+export function parseLogFilename(filename: string): Omit<LogFileInfo, "fullPath" | "sizeBytes" | "modifiedAt"> | null {
+  const m = /^([a-zA-Z0-9_]+)-(\d{6})_(\d+)\.txt$/i.exec(filename);
+  if (!m) return null;
+  return {
+    filename,
+    prefix: m[1].toLowerCase(),
+    date: m[2],
+    rollover: m[3],
+  };
+}
+
+/** List all Symphony log files in one directory, optionally filtered */
+async function listLogFilesInDir(
+  logDir: string,
+  opts: { prefix?: string; date?: string },
+  serverLabel?: string,
+): Promise<LogFileInfo[]> {
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(logDir, { withFileTypes: true });
+  } catch {
+    throw new Error(`Cannot list directory: ${logDir}`);
+  }
+
+  const files: LogFileInfo[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const parsed = parseLogFilename(entry.name);
+    if (!parsed) continue;
+    if (opts.prefix && !parsed.prefix.startsWith(opts.prefix.toLowerCase())) continue;
+    if (opts.date && parsed.date !== opts.date) continue;
+
+    const fullPath = path.join(logDir, entry.name);
+    let stat;
+    try {
+      stat = await fs.stat(fullPath);
+    } catch {
+      continue;
+    }
+
+    files.push({
+      ...parsed,
+      fullPath,
+      sizeBytes: stat.size,
+      modifiedAt: stat.mtime,
+      serverLabel,
+    });
+  }
+  return files;
+}
+
+/**
+ * List all Symphony log files in one or more directories, optionally filtered.
+ * When multiple directories are provided (bug-report mode), each file is tagged
+ * with its `serverLabel` so callers can show which server it came from.
+ */
+export async function listLogFiles(
+  logDir: string | string[],
+  opts: {
+    prefix?: string;
+    date?: string;
+    limit?: number;
+    /** Labels corresponding to each dir in logDir (when logDir is an array) */
+    serverLabels?: string[];
+  } = {}
+): Promise<LogFileInfo[]> {
+  const dirs = Array.isArray(logDir) ? logDir : [logDir];
+  const labels = opts.serverLabels ?? [];
+
+  const allFiles: LogFileInfo[] = [];
+  for (let i = 0; i < dirs.length; i++) {
+    const label = labels[i]; // undefined if not in bug-report mode
+    const batch = await listLogFilesInDir(dirs[i], opts, label);
+    allFiles.push(...batch);
+  }
+
+  // Sort by date desc, rollover desc (numeric), then prefix asc so single-rollover
+  // files (Mo, pd, sccp, hm …) aren't buried below high-rollover is-* files.
+  allFiles.sort((a, b) => {
+    const dateCmp = b.date.localeCompare(a.date);
+    if (dateCmp !== 0) return dateCmp;
+    const rollCmp = parseInt(b.rollover, 10) - parseInt(a.rollover, 10);
+    if (rollCmp !== 0) return rollCmp;
+    return a.prefix.localeCompare(b.prefix);
+  });
+
+  if (opts.limit) return allFiles.slice(0, opts.limit);
+  return allFiles;
+}
+
+/** Read raw lines from a log file */
+export async function readRawLines(
+  fullPath: string,
+  maxLines?: number
+): Promise<string[]> {
+  const content = await fs.readFile(fullPath, "utf8");
+  const lines = content.split(/\r?\n/);
+  if (maxLines !== undefined) return lines.slice(0, maxLines);
+  return lines;
+}
+
+/** Read and parse a log file into LogEntry objects */
+export async function readLogEntries(
+  fullPath: string,
+  maxLines?: number
+): Promise<LogEntry[]> {
+  const lines = await readRawLines(fullPath, maxLines);
+  return parseLogEntries(lines);
+}
+
+/** Resolve a log file path — accepts full path or filename within logDir */
+export function resolveLogPath(fileRef: string, logDir: string | string[]): string {
+  if (path.isAbsolute(fileRef)) return fileRef;
+  const dir = Array.isArray(logDir) ? logDir[0] : logDir;
+  return path.join(dir, fileRef);
+}
+
+/**
+ * Expand a list of file refs to absolute paths.
+ * Accepts:
+ *   - exact filenames:      "is-260227_31.txt"
+ *   - prefix only:          "is"  → all is-*.txt in logDir
+ *   - prefix+date:          "is-260227" → is-260227_*.txt
+ * When logDir is an array (bug-report mode) the search covers all directories.
+ * Deduplicates and preserves order.
+ */
+export async function resolveFileRefs(fileRefs: string[], logDir: string | string[]): Promise<string[]> {
+  const dirs = Array.isArray(logDir) ? logDir : [logDir];
+  const result: string[] = [];
+  // Cache the directory listing so we only read once across multiple refs
+  let cachedFiles: LogFileInfo[] | null = null;
+  const getFiles = async () => {
+    if (!cachedFiles) cachedFiles = await listLogFiles(dirs);
+    return cachedFiles;
+  };
+
+  for (let ref of fileRefs) {
+    ref = ref.trim();
+    if (!ref) continue;
+    if (path.isAbsolute(ref)) {
+      result.push(ref);
+      continue;
+    }
+    // Exact filename recognised by the rollover suffix pattern — search all dirs
+    if (/^[a-zA-Z0-9_]+-\d{6}_\d+\.txt$/i.test(ref)) {
+      for (const dir of dirs) {
+        const candidate = path.join(dir, ref);
+        try {
+          await fs.access(candidate);
+          result.push(candidate);
+        } catch { /* not in this dir */ }
+      }
+      continue;
+    }
+    // Prefix-based expansion. Three forms accepted:
+    //   "is"            → exact prefix match (f.prefix === "is")   — does NOT match isac
+    //   "is-260227"     → prefix + date exact match
+    //   "is-260227_31"  → already handled above by the filename regex
+    const lower = ref.toLowerCase().replace(/[-_]$/, "");
+    const all = await getFiles();
+    for (const f of all) {
+      const keyNoRoll = `${f.prefix}-${f.date}`;  // e.g. "is-260227"
+      const keyFull   = `${f.prefix}-${f.date}_${f.rollover}`; // e.g. "is-260227_31"
+      if (
+        f.prefix === lower ||        // exact prefix:      "is" → is-*
+        keyNoRoll === lower ||        // prefix+date:       "is-260227" → is-260227_*
+        keyFull   === lower           // full key no ext:   "is-260227_31"
+      ) {
+        result.push(f.fullPath);
+      }
+    }
+  }
+
+  // Deduplicate preserving order
+  return [...new Set(result)];
+}
+
+/** Return true if a log timestamp (HH:MM:SS.mmm) falls within [startTime, endTime] (HH:MM:SS) */
+export function isInTimeWindow(timestamp: string, startTime?: string, endTime?: string): boolean {
+  if (!startTime && !endTime) return true;
+  const t = timestamp.slice(0, 8); // HH:MM:SS
+  if (startTime && t < startTime) return false;
+  if (endTime && t > endTime) return false;
+  return true;
+}
+
+/** Format bytes for display */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

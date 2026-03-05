@@ -1,13 +1,25 @@
 {
   "name": "symphony-log-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for reading and analyzing Symphony VMS log files",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "symphony-log-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",

@@ -85,23 +85,22 @@ Once configured, you can ask your AI assistant natural language questions like:
 
 The AI assistant will automatically invoke the appropriate MCP tools and interpret the results for you.
 
-## Available Tools
+## Available Tools (10)
 
-- `compare_logs` - Side-by-side comparison of two log directories
-- `search_errors` - Find and deduplicate error patterns
-- `search_pattern` - Search for text/regex patterns across logs
-- `get_slow_requests` - Find requests exceeding a duration threshold
-- `get_stack_traces` - Extract exception stack traces
-- `get_service_lifecycle` - Track service start/stop/restart events
-- `get_process_lifetimes` - Analyze process restarts from sccp logs
-- `get_pd_crashes` - Extract native crash dumps from pd logs
-- `search_http_requests` - Parse HTTP request logs with grouping
-- `trace_mb_request` - Trace RPC requests from MobileBridge to InfoService
-- `summarize_health` - Generate process health dashboard
-- `correlate_timelines` - Merge multiple log files chronologically
-- `list_log_files` - List available log files
-- `decode_log_prefix` - Look up log file prefix meanings
-- `describe_bug_report` - Extract bug report package metadata
+All tools use the `sym_` prefix for easy discovery.
+
+| Tool | Description |
+|------|-------------|
+| `sym_info` | Bug report metadata, list log files, decode prefixes (action: `bug_report` \| `list_files` \| `decode_prefix`) |
+| `sym_search` | Search for errors or text/regex patterns (mode: `errors` \| `pattern`) |
+| `sym_crashes` | Extract .NET exceptions or native C++ crash dumps (mode: `managed` \| `native`) |
+| `sym_lifecycle` | Service start/stop/restart events or process-level PID tracking (mode: `services` \| `processes`) |
+| `sym_timeline` | Merge logs chronologically or trace RPC calls across Mo→IS (mode: `correlate` \| `trace_rpc`) |
+| `sym_slow_requests` | Find requests exceeding a duration threshold with grouping and histograms |
+| `sym_http` | Analyze HTTP request logs with grouping, rate histograms, and status filtering |
+| `sym_ui_thread` | Detect UI thread freezes and deadlocks in AiraExplorer client logs |
+| `sym_health` | Generate process health dashboard (HEALTHY / DEGRADED / CRITICAL) |
+| `sym_compare` | Side-by-side diff of two log directories (errors, lifecycle, health, http, slow) |
 
 See the tool descriptions in the MCP client for detailed parameter documentation.
 
@@ -110,7 +109,7 @@ See the tool descriptions in the MCP client for detailed parameter documentation
 While this server is designed for MCP clients, you can invoke it directly for testing:
 
 ```bash
-echo '{"method":"tools/call","params":{"name":"compare_logs","arguments":{"dirA":"C:/Logs/133","dirB":"C:/Logs/138"}}}' | node dist/index.js
+echo '{"method":"tools/call","params":{"name":"sym_compare","arguments":{"dirA":"C:/Logs/133","dirB":"C:/Logs/138"}}}' | node dist/index.js
 ```
 
 ## Contributing

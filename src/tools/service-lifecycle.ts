@@ -1,5 +1,6 @@
 import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
 import type { LogEntry } from "../lib/log-parser.js";
+import { fingerprintShort } from "../lib/fingerprint.js";
 
 /**
  * High-volume init chatter we do NOT want as lifecycle events.
@@ -36,14 +37,21 @@ const STOP_PATTERNS = [
   /exiting/i,
 ];
 
-/** Keywords that indicate a forced restart or failover condition */
+/** Keywords that indicate a forced restart or failover condition.
+ *  Verified against source code:
+ *  - "buddy" — farm failover (CFarmHealth.cs sends ALIVE to buddies)
+ *  - "ALIVE" — farm heartbeat (30-second threshold per Signals.asmx.cs:8669)
+ *  - "failover" — SAN/server failover (ResourceLocations.cpp, ControlRequest.cs)
+ *  - "WallGetPanels" — video wall layout request (Signals.asmx.cs:9359)
+ *  - "Database is down" — actual log message (Service.cpp:216)
+ *  - "RestartMyself" — Tracker self-restart method (TrackerAx.cpp:921)
+ *  NOTE: "too many timeouts on web broker threads", "database went away",
+ *  "database came back", and "self-restart" do NOT exist in source code.
+ */
 const RESTART_REASON_PATTERNS = [
-  /too many timeouts/i,
-  /timeout.*web.*broker/i,
-  /database.*went.*away/i,
-  /database.*came.*back/i,
+  /database.*is.*down/i,
   /restarting/i,
-  /self-restart/i,
+  /RestartMyself/i,
   /failover/i,
   /fail.*over/i,
   /lost connection/i,
@@ -53,9 +61,12 @@ const RESTART_REASON_PATTERNS = [
   /server.*unreachable/i,
   /buddy.*lost/i,
   /buddy.*failed/i,
+  /buddy.*down/i,
   /ALIVE.*failed/i,
   /not alive/i,
-  /WallGetPanels.*timed out/i,
+  /WallGetPanels/i,
+  /timeout.*web.*broker/i,
+  /too many timeouts/i,
 ];
 
 interface LifecycleEvent {
@@ -66,21 +77,8 @@ interface LifecycleEvent {
   message: string;
 }
 
-/** Fingerprint a restart-cause message for deduplication.
- *  Strips GUIDs, IPs, exceptionGuids, request IDs, numeric values so that
- *  "WallGetPanels timed out exceptionGuid=abc123" and "...exceptionGuid=xyz456" collapse. */
-function causeFingerprint(message: string): string {
-  return message
-    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<GUID>")
-    .replace(/exceptionGuid=\S+/gi, "exceptionGuid=<GUID>")
-    .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?/g, "<IP>")
-    .replace(/Request\(\d+\)/g, "Request(N)")
-    .replace(/0x[0-9a-fA-F]+/g, "<PTR>")
-    .replace(/\b\d{5,}\b/g, "<NUM>")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 120);
-}
+/** Fingerprint a restart-cause message for deduplication — delegates to shared utility. */
+const causeFingerprint = (message: string) => fingerprintShort(message, 120);
 
 function classify(entry: LogEntry): "start" | "stop" | "restart-reason" | "ping" | null {
   const msg = entry.line.message;

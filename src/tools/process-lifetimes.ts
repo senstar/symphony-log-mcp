@@ -1,11 +1,18 @@
 /**
- * Process lifetime tracker — parses sccp (System CPU/Check Process) log files.
+ * Process lifetime tracker — parses sccp (Scheduler – CPU/Memory Stats) log files.
  *
- * sccp logs contain periodic snapshots of every running process with columns:
- *   Name  PID(N):  thrd  hndl  usr  gdi  free  maxfree  mem(MB)  pf(MB)  cpu%  MM/DD  HH:MM  userTime  kernelTime
+ * sccp logs contain periodic snapshots of every running process.
+ * Format from CpuCounter.cpp:
+ *   Header: "                          Name PID            Thrd   Hndl   Usr   GDI       Free    MaxFree  Mem(MB)   PF(MB)  CPU%  Start Time  User Time  Kernel Tm"
+ *   Body:   "%30s PID(%7d): %5d %6d %5d %5d %10d %10d %8.2f %8.2f %4d%% %02d/%02d %02d:%02d %4d:%02d:%02d %4d:%02d:%02d"
+ *
+ * Trackers get special naming: "Tracker(NNNN)" via _snprintf(sName, ..., "Tracker(%4d)", camera.TrackerId())
+ * Other processes use their exe filename (from GetProcessImageFileName).
  *
  * By tracking PID changes across snapshots we can tell when a process restarted,
  * how long it ran, and what its steady-state memory / CPU usage was.
+ *
+ * Log file rollover: 5 MB max per file (MAX_FILE_SIZE = 5000000).
  */
 
 import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
@@ -48,19 +55,28 @@ function parseSccpLine(message: string): { name: string; pid: number; mem: numbe
   };
 }
 
-// Symphony-specific processes we care about tracking restarts for
+// Symphony-specific processes we care about tracking restarts for.
+// Names verified from actual exe outputs and sccp log format:
+//   Tracker(NNNN) — special format from CpuCounter.cpp
+//   infoservice.exe, scheduler.exe, ae.exe, seermanager.exe,
+//   fusionengineservice.exe, hardwarecontainerservice*.exe,
+//   mobilebridge.exe, onvifserver.exe, killall.exe, nssm.exe,
+//   surrogateexe.exe, netsendhistmfc.exe
 const SYMPHONY_PROCESS_PATTERNS = [
   /^Tracker\s*\(/i,
   /^infoservice/i,
-  /^airaexplorer/i,
-  /^airamanager/i,
-  /^schedulerservice/i,
-  /^fusioenginservice/i,
+  /^ae\.exe/i,
+  /^seermanager/i,
+  /^scheduler/i,
+  /^fusionengineservice/i,
   /^hardwarecontainer/i,
-  /^mobilbridge/i,
+  /^mobilebridge/i,
   /^onvifserver/i,
-  /^killallex/i,
+  /^killall/i,
   /^nssm/i,
+  /^surrogateexe/i,
+  /^netsendhistmfc/i,
+  /^seer\.web/i,
 ];
 
 function isSymphonyProcess(name: string): boolean {

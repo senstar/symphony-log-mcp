@@ -5,12 +5,24 @@
  * to InfoService (IS log).  The linkage is the IS sequence number, which both
  * logs share:
  *   Mo:  "Sent Request(Foo)[<guid>] with sequence #N"
- *   IS:  "Invoking request Request(N)[Foo] received from 127.0.0.1:<port>"
+ *   IS:  "Invoking request Request(N)[Foo] receieved from 127.0.0.1:<port>"
+ *
+ * Verified from source code:
+ *   Mo sent:     MessageDispatcher.cs:1352 — _logger.Log(LogLevel, MethodName, "Sent {0} with sequence #{1}", exchange, message.SequenceNumber)
+ *   Mo received: MessageDispatcher.cs:1227 — _logger.Log(LogLevel, MethodName, "Received response to {0} with sequence #{1}", exchange, sequenceNumber)
+ *   IS invoke:   WebServiceRequestProcessor.cs:459 — "Invoking request {0} receieved from {1} with session ID {2}..."
+ *   IS done:     WebServiceRequestProcessor.cs:473 — "Invocation of request {0} for {1} took {2}"
+ *   IS handler:  AILog.cs Format() → "{FunctionalArea}\t{Class}.{Method}[{Instance}]\t{Message}"
+ *
+ * The "receieved" typo is confirmed in source code (WebServiceRequestProcessor.cs:459).
+ * Sequence numbers are per-MessageDispatcher instance (per-endpoint), simple incrementing int.
+ * Exchange.ToString() = "Request({MethodName}{ExtraDetails})[{GUID}]"
+ * UserRequest.ToString() = "Request({SequenceNumber})[{MethodName}{ExtraDetails}]"
+ * System auth uses SYSTEM_USERNAME = "___$System$___" (CSecurityManagerBase.cs:47).
  */
 
-import * as fs from "fs/promises";
 import * as path from "path";
-import { resolveFileRefs, listLogFiles, isInTimeWindow } from "../lib/log-reader.js";
+import { resolveFileRefs, listLogFiles, isInTimeWindow, readRawLinesWithTimeFilter } from "../lib/log-reader.js";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Regex patterns
@@ -115,13 +127,11 @@ async function parseMoHops(
   startTime?: string,
   endTime?: string
 ): Promise<MoHop[]> {
-  let raw: string;
+  let lines: string[];
   try {
-    raw = await fs.readFile(fullPath, "utf8");
+    lines = await readRawLinesWithTimeFilter(fullPath, startTime, endTime);
   } catch { return []; }
-  if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
 
-  const lines = raw.split(/\r?\n/);
   const filename = path.basename(fullPath);
 
   // Map guid → MoHop (started but awaiting recv)
@@ -183,13 +193,11 @@ async function parseIsHops(
   startTime?: string,
   endTime?: string
 ): Promise<IsHop[]> {
-  let raw: string;
+  let lines: string[];
   try {
-    raw = await fs.readFile(fullPath, "utf8");
+    lines = await readRawLinesWithTimeFilter(fullPath, startTime, endTime);
   } catch { return []; }
-  if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
 
-  const lines = raw.split(/\r?\n/);
   const filename = path.basename(fullPath);
 
   const pending = new Map<number, IsHop>(); // seq → IsHop

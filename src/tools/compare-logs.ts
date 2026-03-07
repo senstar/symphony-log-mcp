@@ -21,7 +21,7 @@ import AdmZip from "adm-zip";
 import { computeErrorGroups } from "./search-errors.js";
 import { toolGetServiceLifecycle } from "./service-lifecycle.js";
 import { toolSearchHttpRequests } from "./search-http-requests.js";
-import { toolGetSlowRequests } from "./slow-requests.js";
+
 import { toolSummarizeHealth } from "./summarize-health.js";
 import { listLogFiles, readRawLines } from "../lib/log-reader.js";
 
@@ -505,20 +505,23 @@ export async function toolCompareLogs(
   if (include.includes("slow")) {
     out.push(divider("SLOW REQUESTS (grouped by method)"));
 
-    const slowFiles = ["is", "Mo", "cs", "Tracker"];
     const [resA, resB] = await Promise.all([
-      toolGetSlowRequests(dirA, {
-        files:       slowFiles,
+      toolSearchHttpRequests(dirA, {
+        files:       ["is", "Mo", "cs", "Tracker"],
+        mode:        "slow",
         thresholdMs: 1000,
-        groupBy:     "request",
+        slowGroupBy: "request",
+        includeRpc:  true,
         limit,
         startTime:   startTimeA,
         endTime:     endTimeA,
       }),
-      toolGetSlowRequests(dirB, {
-        files:       slowFiles,
+      toolSearchHttpRequests(dirB, {
+        files:       ["is", "Mo", "cs", "Tracker"],
+        mode:        "slow",
         thresholdMs: 1000,
-        groupBy:     "request",
+        slowGroupBy: "request",
+        includeRpc:  true,
         limit,
         startTime:   startTimeB,
         endTime:     endTimeB,

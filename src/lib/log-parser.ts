@@ -1,14 +1,22 @@
 /**
  * Symphony log line parser.
  *
- * Format:
- *   HH:MM:SS.mmm    THREADID <LEVEL   > [FunctionalArea\t]Source[context]\tMessage
+ * Format (from AILog.cpp LogInternal()):
+ *   HH:MM:SS.mmm  THREADID <LEVEL8__> [FunctionalArea\t]Source[context]\tMessage
+ *
+ * Where LEVEL8 is %-8.8s — left-justified, min 8 / max 8 characters.
+ * The C++ code strips "Log" prefix before formatting, so "LogError" → "Error   ".
  *
  * Stack trace continuation lines start with whitespace followed by "at ".
  * A log "entry" is the main line plus all immediately-following continuation lines.
  *
- * Log levels (8 chars padded inside <>):
- *   Verbose , BasicInf, MoreInfo, Diagnost, Error   , LogError
+ * Log levels (8 chars padded inside <>), verified from AILog.cpp LOG_LEVELS:
+ *   Error    BasicInf  MoreInfo  Verbose   Diagnost  Tracker
+ *   Classifi NetCam    FrameInf  PTZMask   CMask     Policies
+ *   PTZ      AlarmInf  OptFlow   Tracking  SchedAna  Stationa
+ *   Live555  AccessCo  MultiHom  Fence     Alarming  TimeDrif
+ *   OptFlowV Objects   MultiStr  BWInfo    IppProfi  VideoDec
+ *   AudioDec All
  */
 
 export type LogLevel =
@@ -51,15 +59,49 @@ export interface LogEntry {
 // ------------------------------------------------------------------ helpers
 
 const LEVEL_MAP: Record<string, LogLevel> = {
+  // Primary levels — these are the most commonly seen
   "Verbose ": "Verbose",
   "BasicInf": "BasicInfo",
   "MoreInfo": "MoreInfo",
   "Diagnost": "Diagnostic",
   "Error   ": "Error",
+  // Note: "LogError" never appears in logs — the C++ code strips the "Log"
+  // prefix before writing, so it always appears as "Error   ". Kept for
+  // defensive compatibility only.
   "LogError": "Error",
+  // Sub-diagnostic levels (all are more verbose than Diagnostic).
+  // Mapped to Verbose since they're detailed instrumentation.
+  "Tracker ": "Verbose",
+  "Classifi": "Verbose",
+  "NetCam  ": "Verbose",
+  "FrameInf": "Verbose",
+  "PTZMask ": "Verbose",
+  "CMask   ": "Verbose",
+  "Policies": "Verbose",
+  "PTZ     ": "Verbose",
+  "AlarmInf": "Verbose",
+  "OptFlow ": "Verbose",
+  "Tracking": "Verbose",
+  "SchedAna": "Verbose",
+  "Stationa": "Verbose",
+  "Live555 ": "Verbose",
+  "AccessCo": "Verbose",
+  "MultiHom": "Verbose",
+  "Fence   ": "Verbose",
+  "Alarming": "Verbose",
+  "TimeDrif": "Verbose",
+  "OptFlowV": "Verbose",
+  "Objects ": "Verbose",
+  "MultiStr": "Verbose",
+  "BWInfo  ": "Verbose",
+  "IppProfi": "Verbose",
+  "VideoDec": "Verbose",
+  "AudioDec": "Verbose",
+  "All     ": "Verbose",
 };
 
-/** Regex for the header portion of a log line */
+/** Regex for the header portion of a log line.
+ *  C++ format: "%02i:%02i:%02i.%03i %7d <%-8.8s> " → thread ID right-justified 7 chars */
 const LINE_RE =
   /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+) <([^>]{8})> (.*)$/;
 
@@ -70,6 +112,8 @@ const TOOK_RE = /took (\d{2}):(\d{2}):(\d{2})\.(\d+)/;
 const CONTINUATION_RE = /^\s{2,}/;
 
 // ------------------------------------------------------------------ timing
+
+const MS_PER_DAY = 86_400_000;
 
 export function timestampToMs(ts: string): number {
   const [h, m, rest] = ts.split(":");
@@ -156,10 +200,14 @@ export function parseLogLine(raw: string, lineNumber: number): LogLine | null {
   };
 }
 
-/** Parse raw text lines into LogEntry objects (line + continuation lines) */
+/** Parse raw text lines into LogEntry objects (line + continuation lines).
+ *  Detects midnight rollover: if a timestamp jumps backward by >20 hours,
+ *  subsequent entries get a +24h offset on timestampMs so sorting stays correct. */
 export function parseLogEntries(rawLines: string[]): LogEntry[] {
   const entries: LogEntry[] = [];
   let currentEntry: LogEntry | null = null;
+  let dayOffset = 0;
+  let prevMs = -1;
 
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i];
@@ -176,6 +224,14 @@ export function parseLogEntries(rawLines: string[]): LogEntry[] {
     // Attempt to parse as a new log line
     const parsed = parseLogLine(raw, i + 1);
     if (parsed) {
+      // Midnight rollover detection: if raw timestamp drops by >20 hours,
+      // we've crossed midnight — add a day offset.
+      if (prevMs >= 0 && parsed.timestampMs < prevMs && (prevMs - parsed.timestampMs) > 20 * 3_600_000) {
+        dayOffset += MS_PER_DAY;
+      }
+      prevMs = parsed.timestampMs;
+      parsed.timestampMs += dayOffset;
+
       if (currentEntry) entries.push(currentEntry);
       currentEntry = {
         line: parsed,

@@ -1,20 +1,23 @@
 /**
  * search-http-requests.ts
  *
- * Parses IS "RequestLogger" entries from IS (Nancy/ASP.NET HTTP host on port 50014).
- * These record inbound HTTP calls to the Symphony web management UI and REST API.
+ * Parses "RequestLogger" entries from Seer.Web.Host (OWIN middleware on port base+14,
+ * default 50014 HTTPS). Request IDs cycle mod 99999.
+ * Source: Seer.Web.Host\Middleware\RequestLogger.cs
  *
- * Log format (three interleaved lines per request):
+ * Log format (interleaved lines per request):
  *   BasicInfo:  RequestLogger   | [#N] GET /api/videowalls
  *   Verbose:    RequestLogger   | [#N] Request from 10.234.100.111
  *   MoreInfo:   RequestLogger   | [#N] GET /api/videowalls, status: 200, duration: 5 ms
  *   Diagnost:   RequestLogger   | [#N] GET /api/videowalls, WaitingForActivation, processing: 679 ms...
+ *   Diagnost:   RequestLogger   | [#N] GET /api/videowalls, request was cancelled
+ *   LogError:   RequestLogger   | [#N] GET /api/videowalls, status: 500, duration: 42 ms  (on exception)
  */
 
-import * as fs from "fs/promises";
 import * as path from "path";
-import { resolveFileRefs } from "../lib/log-reader.js";
+import { resolveFileRefs, readRawLines } from "../lib/log-reader.js";
 import { isInTimeWindow } from "../lib/log-reader.js";
+import { findSlowRpcRequests, formatSlowRequests, type SlowRequest } from "./slow-requests.js";
 
 // ── Regex patterns ─────────────────────────────────────────────────────────────
 
@@ -24,8 +27,9 @@ const RE_START  = /RequestLogger\s+\|\s+\[#(\d+)\]\s+(GET|POST|PUT|DELETE|PATCH|
 const RE_FROM   = /RequestLogger\s+\|\s+\[#(\d+)\]\s+Request from\s+(\S+)/;
 // MoreInfo completion: "[#N] METHOD /path, status: 200, duration: 5 ms"
 const RE_DONE   = /RequestLogger\s+\|\s+\[#(\d+)\]\s+\S+\s+\S+,\s+status:\s+(\d+),\s+duration:\s+(\d+)\s+ms/;
-// Diagnost slow: "[#N] METHOD /path, WaitingForActivation, processing: 679 ms..."
-const RE_SLOW   = /RequestLogger\s+\|\s+\[#(\d+)\]\s+.*,\s+(?:WaitingForActivation)(?:.*processing:\s+(\d+)\s+ms)/;
+// Diagnost slow: "[#N] METHOD /path, <TaskStatus>, processing: 679 ms..."
+// TaskStatus can be WaitingForActivation, Running, RanToCompletion, etc.
+const RE_SLOW   = /RequestLogger\s+\|\s+\[#(\d+)\]\s+.*,\s+\w+,?\s*processing:\s+(\d+)\s+ms/;
 // Timestamp
 const RE_TS     = /^(\d{2}:\d{2}:\d{2}\.\d{3})/;
 
@@ -88,13 +92,11 @@ async function parseHttpRequests(
   startTime?: string,
   endTime?: string
 ): Promise<HttpRequest[]> {
-  let raw: string;
+  let lines: string[];
   try {
-    raw = await fs.readFile(fullPath, "utf8");
+    lines = await readRawLines(fullPath);
   } catch { return []; }
-  if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
 
-  const lines = raw.split(/\r?\n/);
   const filename = path.basename(fullPath);
 
   const pending = new Map<number, HttpRequest>();
@@ -162,19 +164,25 @@ async function parseHttpRequests(
 
 export interface SearchHttpArgs {
   files: string[];
+  /** Tool mode: 'requests' (default list/group), 'slow' (RPC + HTTP slow), 'rates', 'totals' */
+  mode?: "requests" | "slow" | "rates" | "totals";
   pathFilter?: string;     // substring or regex string for the URL path
   method?: string;         // GET, POST, etc.
   minDurationMs?: number;  // only show requests slower than this
   clientIp?: string;       // filter by client IP substring
   statusFilter?: (number | string)[];  // e.g. [500, 503] or ["5xx", "error", "4xx"]
   groupBy?: "path" | "client" | "status" | "statusClass";  // aggregate stats instead of listing
-  sortBy?: "avg" | "max" | "count" | "errors";  // sort order within groupBy mode (default "max")
+  sortBy?: "avg" | "max" | "count" | "errors" | "duration" | "time";  // sort order
   rateBy?: "minute" | "5min" | "hour";           // show rate-over-time histogram instead of groupBy/list
+  /** For slow mode: also include RPC-level "took HH:MM:SS" entries (default true) */
+  includeRpc?: boolean;
+  /** For slow mode: group by method name */
+  slowGroupBy?: "request";
+  /** Minimum duration threshold in ms for slow mode (default 1000) */
+  thresholdMs?: number;
   /**
    * Analyse request rate per minute to automatically identify the peak-traffic
    * test window (continuous period where rate ≥ 10% of peak minute rate).
-   * Returns detected startTime/endTime bounds (HH:MM:SS) that can be fed into
-   * other tools' startTime/endTime params. Prepended to all other output.
    */
   detectActiveWindow?: boolean;
   startTime?: string;
@@ -205,6 +213,53 @@ export async function toolSearchHttpRequests(
     isAssets = false,
     totalsOnly = false,
   } = args;
+
+  const toolMode = args.mode ?? "requests";
+
+  // ── "slow" mode: merged RPC + HTTP slow request analysis ────────────────
+  if (toolMode === "slow") {
+    const thresholdMs = args.thresholdMs ?? 1000;
+    const includeRpc = args.includeRpc !== false;
+    const slowLimit = args.limit ?? 50;
+    const slowSortBy = (args.sortBy as "duration" | "time") ?? "duration";
+
+    const allSlow: SlowRequest[] = [];
+
+    // HTTP-layer slow requests
+    const paths = await resolveFileRefs(args.files, logDir);
+    for (const fp of paths) {
+      const entries = await findSlowHttpRequests(fp, thresholdMs, startTime, endTime);
+      for (const e of entries) {
+        allSlow.push({
+          file: e.file,
+          timestamp: e.timestamp,
+          threadId: "-",
+          source: "RequestLogger (HTTP)",
+          message: `${e.method} ${e.path}  →  ${e.status ?? "?"}  took ${e.durationMs}ms`,
+          durationMs: e.durationMs,
+        });
+      }
+    }
+
+    // RPC-level slow requests
+    if (includeRpc) {
+      const rpcSlow = await findSlowRpcRequests(logDir, args.files, thresholdMs, startTime, endTime);
+      allSlow.push(...rpcSlow);
+    }
+
+    return formatSlowRequests(allSlow, {
+      thresholdMs,
+      limit: slowLimit,
+      sortBy: slowSortBy,
+      groupBy: args.slowGroupBy,
+    });
+  }
+
+  // ── "totals" shortcut mode ──────────────────────────────────────────────
+  // (fall through to normal processing with totalsOnly flag)
+
+  // ── "rates" shortcut mode ───────────────────────────────────────────────
+  // (fall through to normal processing with rateBy flag)
 
   const paths = await resolveFileRefs(args.files, logDir);
   if (paths.length === 0) return `No log files found for: ${args.files.join(", ")}`;

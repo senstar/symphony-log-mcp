@@ -1,5 +1,6 @@
 import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
 import { extractStackTrace, type LogEntry } from "../lib/log-parser.js";
+import { fingerprint } from "../lib/fingerprint.js";
 import * as path from "path";
 
 export interface ErrorGroup {
@@ -8,25 +9,6 @@ export interface ErrorGroup {
   first: LogEntry;
   last: LogEntry;
   hasStack: boolean;
-}
-
-/**
- * Normalize an error message to a fingerprint for deduplication.
- * Strips GUIDs, memory addresses, request IDs, IP:ports, and numbers.
- */
-function fingerprint(message: string): string {
-  return message
-    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<GUID>")
-    .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+\b/g, "<IP:PORT>")
-    .replace(/0x[0-9a-fA-F]+/g, "<PTR>")
-    // Normalize Request(N) request IDs — these change per-call but are the same pattern
-    .replace(/Request\(\d+\)/g, "Request(N)")
-    // Strip port numbers like :8398, :8640 when not part of IP:PORT already
-    .replace(/:\d{4,5}\b/g, ":<PORT>")
-    .replace(/\b\d{5,}\b/g, "<NUM>")
-    .replace(/\[\d+\]/g, "[N]")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 export interface SearchErrorsArgs {

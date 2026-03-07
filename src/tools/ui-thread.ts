@@ -1,5 +1,6 @@
-import { readLogEntries, resolveLogPath } from "../lib/log-reader.js";
+import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
 import type { LogEntry } from "../lib/log-parser.js";
+import * as path from "path";
 
 /**
  * For AiraExplorer (ae) logs, the UI thread is typically the thread that
@@ -12,6 +13,7 @@ import type { LogEntry } from "../lib/log-parser.js";
 
 const UI_INDICATORS = [
   /\bDispatcher\b/i,
+  /\bDispatcherObject\b/i,
   /\bInvoke\b/i,
   /\bBeginInvoke\b/i,
   /\bUI.*thread\b/i,
@@ -22,22 +24,26 @@ const UI_INDICATORS = [
   /\bKeyDown\b|\bMouseClick\b|\bButtonClick\b/i,
   /CameraViewVideoModeManager/i,
   /LoadClientLogs/i,
+  /\bBinding\b/i,
+  /\bDependencyProperty\b/i,
+  /\bWPF\b/i,
+  /\bMeasureOverride\b|\bArrangeOverride\b/i,
+  /\bVisual\b.*\bUpdate/i,
+  /\bRenderThread\b/i,
 ];
 
 /** Identify likely UI thread IDs from patterns of entries */
 function guessUiThreadId(entries: LogEntry[]): string | null {
-  const threadActivity = new Map<string, number>();
   const threadUiScore = new Map<string, number>();
 
   for (const e of entries) {
     const tid = e.line.threadId;
-    threadActivity.set(tid, (threadActivity.get(tid) ?? 0) + 1);
     if (UI_INDICATORS.some((p) => p.test(e.line.message))) {
       threadUiScore.set(tid, (threadUiScore.get(tid) ?? 0) + 1);
     }
   }
 
-  // Thread with highest UI score (and at least some activity)
+  // Thread with highest UI score
   let best: string | null = null;
   let bestScore = 0;
   for (const [tid, score] of threadUiScore) {
@@ -52,34 +58,54 @@ function guessUiThreadId(entries: LogEntry[]): string | null {
 export async function toolGetUiThreadActivity(
   logDir: string | string[],
   args: {
-    file: string;
+    files: string[];
     threadId?: string;
     lastN?: number;
     fullLog?: boolean;
+    freezeThresholdMs?: number;
+    startTime?: string;
+    endTime?: string;
   }
 ): Promise<string> {
-  const fullPath = resolveLogPath(args.file, logDir);
   const lastN = args.lastN ?? 30;
+  const freezeThreshold = args.freezeThresholdMs ?? 5000;
 
-  let entries: LogEntry[];
-  try {
-    entries = await readLogEntries(fullPath);
-  } catch (e) {
-    return `Error reading file: ${e}`;
+  const paths = await resolveFileRefs(args.files, logDir);
+  if (paths.length === 0) return `No log files found for: ${args.files.join(", ")}`;
+
+  // Collect entries from all files
+  let allEntries: (LogEntry & { sourceFile: string })[] = [];
+  for (const fullPath of paths) {
+    const fileRef = path.basename(fullPath);
+    try {
+      const entries = await readLogEntries(fullPath);
+      for (const e of entries) {
+        if (!isInTimeWindow(e.line.timestamp, args.startTime, args.endTime)) continue;
+        allEntries.push({ ...e, sourceFile: fileRef });
+      }
+    } catch {
+      continue;
+    }
   }
+
+  if (allEntries.length === 0) {
+    return `No log entries found in specified files${args.startTime ? ` within time window ${args.startTime}–${args.endTime ?? "end"}` : ""}.`;
+  }
+
+  // Sort by timestampMs
+  allEntries.sort((a, b) => a.line.timestampMs - b.line.timestampMs);
 
   let targetThread = args.threadId;
 
   if (!targetThread) {
-    targetThread = guessUiThreadId(entries) ?? undefined;
+    targetThread = guessUiThreadId(allEntries) ?? undefined;
   }
 
   const out: string[] = [];
 
   if (!targetThread) {
-    // List all threads with entry counts so user can pick one
     const threadCounts = new Map<string, number>();
-    for (const e of entries) {
+    for (const e of allEntries) {
       threadCounts.set(e.line.threadId, (threadCounts.get(e.line.threadId) ?? 0) + 1);
     }
     const sorted = [...threadCounts.entries()].sort((a, b) => b[1] - a[1]);
@@ -93,9 +119,10 @@ export async function toolGetUiThreadActivity(
     return out.join("\n");
   }
 
-  const threadEntries = entries.filter((e) => e.line.threadId === targetThread);
+  const threadEntries = allEntries.filter((e) => e.line.threadId === targetThread);
+  const filesLabel = paths.length === 1 ? path.basename(paths[0]) : `${paths.length} files`;
 
-  out.push(`Thread TID ${targetThread} has ${threadEntries.length} total entries in ${args.file}.`);
+  out.push(`Thread TID ${targetThread} has ${threadEntries.length} total entries across ${filesLabel}.`);
 
   if (threadEntries.length === 0) {
     out.push(`No entries found for TID ${targetThread}.`);
@@ -110,18 +137,45 @@ export async function toolGetUiThreadActivity(
 
   for (const e of toShow) {
     const l = e.line;
-    out.push(`[${l.timestamp}] <${l.level.padEnd(9)}> ${l.source}: ${l.message.slice(0, 200)}`);
+    const fileTag = paths.length > 1 ? ` [${e.sourceFile}]` : "";
+    out.push(`[${l.timestamp}] <${l.level.padEnd(9)}> ${l.source}: ${l.message.slice(0, 200)}${fileTag}`);
     if (e.continuationLines.length > 0) {
       out.push(...e.continuationLines.slice(0, 4).map((c) => `  ${c.trim()}`));
     }
   }
 
-  // Time gap analysis: if last entry was much earlier than other thread activity, it froze
-  if (threadEntries.length > 0 && entries.length > 0) {
+  // Intra-thread gap analysis: detect freezes within the UI thread's own log
+  const freezes: { from: string; to: string; gapMs: number; sourceFile: string }[] = [];
+  for (let i = 1; i < threadEntries.length; i++) {
+    const gapMs = threadEntries[i].line.timestampMs - threadEntries[i - 1].line.timestampMs;
+    if (gapMs > freezeThreshold) {
+      freezes.push({
+        from: threadEntries[i - 1].line.timestamp,
+        to: threadEntries[i].line.timestamp,
+        gapMs,
+        sourceFile: threadEntries[i].sourceFile,
+      });
+    }
+  }
+
+  if (freezes.length > 0) {
+    out.push("");
+    out.push(`⚠ Detected ${freezes.length} UI freeze(s) exceeding ${freezeThreshold}ms:`);
+    for (const f of freezes.slice(0, 10)) {
+      const dur = f.gapMs >= 60_000
+        ? `${(f.gapMs / 60_000).toFixed(1)}min`
+        : `${(f.gapMs / 1000).toFixed(1)}s`;
+      out.push(`  ${f.from} → ${f.to}  gap ${dur}`);
+    }
+    if (freezes.length > 10) out.push(`  … (${freezes.length - 10} more)`);
+  }
+
+  // Tail-gap analysis: if last UI entry was much earlier than other thread activity
+  if (threadEntries.length > 0 && allEntries.length > 0) {
     const lastUiMs = threadEntries[threadEntries.length - 1].line.timestampMs;
-    const lastAnyMs = entries[entries.length - 1].line.timestampMs;
+    const lastAnyMs = allEntries[allEntries.length - 1].line.timestampMs;
     const gapMs = lastAnyMs - lastUiMs;
-    if (gapMs > 5000) {
+    if (gapMs > freezeThreshold) {
       out.push("");
       out.push(
         `⚠ UI thread last logged at ${threadEntries[threadEntries.length - 1].line.timestamp}, ` +

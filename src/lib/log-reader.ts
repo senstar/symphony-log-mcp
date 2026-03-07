@@ -1,7 +1,9 @@
 import * as fs from "fs/promises";
+import { createReadStream } from "fs";
+import * as readline from "readline";
 import type { Dirent } from "fs";
 import * as path from "path";
-import { parseLogEntries, type LogEntry } from "./log-parser.js";
+import { parseLogEntries, parseLogLine, type LogEntry, type LogLine } from "./log-parser.js";
 
 export interface LogFileInfo {
   filename: string;
@@ -107,15 +109,44 @@ export async function listLogFiles(
   return allFiles;
 }
 
-/** Read raw lines from a log file */
+/** Read raw lines from a log file, with optional BOM stripping */
 export async function readRawLines(
   fullPath: string,
   maxLines?: number
 ): Promise<string[]> {
-  const content = await fs.readFile(fullPath, "utf8");
+  let content = await fs.readFile(fullPath, "utf8");
+  if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
   const lines = content.split(/\r?\n/);
   if (maxLines !== undefined) return lines.slice(0, maxLines);
   return lines;
+}
+
+/**
+ * Read raw lines from a log file with optional time-window filtering.
+ * Lines whose leading timestamp (HH:MM:SS) falls outside [startTime, endTime]
+ * are excluded. Non-timestamped lines (continuations) are included only if the
+ * preceding timestamped line was in-window.
+ */
+export async function readRawLinesWithTimeFilter(
+  fullPath: string,
+  startTime?: string,
+  endTime?: string,
+): Promise<string[]> {
+  const allLines = await readRawLines(fullPath);
+  if (!startTime && !endTime) return allLines;
+
+  const result: string[] = [];
+  let inWindow = true;
+  const RE_TS = /^(\d{2}:\d{2}:\d{2})/;
+
+  for (const line of allLines) {
+    const tsMatch = RE_TS.exec(line);
+    if (tsMatch) {
+      inWindow = isInTimeWindow(tsMatch[1], startTime, endTime);
+    }
+    if (inWindow) result.push(line);
+  }
+  return result;
 }
 
 /** Read and parse a log file into LogEntry objects */
@@ -201,6 +232,82 @@ export function isInTimeWindow(timestamp: string, startTime?: string, endTime?: 
   if (startTime && t < startTime) return false;
   if (endTime && t > endTime) return false;
   return true;
+}
+
+/**
+ * Stream-based log reader using Node readline.
+ * Processes a log file line-by-line without loading the entire file into memory.
+ * Calls `onEntry` for each parsed LogEntry as it's constructed.
+ * Returns total number of entries processed.
+ */
+export async function streamLogEntries(
+  fullPath: string,
+  onEntry: (entry: LogEntry) => void | boolean, // return false to stop early
+  opts?: {
+    startTime?: string;
+    endTime?: string;
+    maxEntries?: number;
+  }
+): Promise<number> {
+  const { startTime, endTime, maxEntries } = opts ?? {};
+
+  return new Promise((resolve, reject) => {
+    const stream = createReadStream(fullPath, { encoding: "utf8" });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+    let currentEntry: LogEntry | null = null;
+    let count = 0;
+    let stopped = false;
+    let firstChar = true;
+    let lineNum = 0;
+
+    const flush = () => {
+      if (currentEntry) {
+        if (isInTimeWindow(currentEntry.line.timestamp, startTime, endTime)) {
+          const shouldContinue = onEntry(currentEntry);
+          count++;
+          if (shouldContinue === false || (maxEntries && count >= maxEntries)) {
+            stopped = true;
+            rl.close();
+            stream.destroy();
+            return;
+          }
+        }
+        currentEntry = null;
+      }
+    };
+
+    rl.on("line", (rawLine) => {
+      if (stopped) return;
+
+      // Strip BOM from first line
+      let line = rawLine;
+      if (firstChar) {
+        firstChar = false;
+        if (line.charCodeAt(0) === 0xFEFF) line = line.slice(1);
+      }
+
+      lineNum++;
+      const parsed = parseLogLine(line, lineNum);
+      if (parsed) {
+        flush();
+        if (stopped) return;
+        currentEntry = { line: parsed, continuationLines: [], fullText: line };
+      } else if (currentEntry) {
+        currentEntry.continuationLines.push(line);
+        currentEntry.fullText += "\n" + line;
+      }
+    });
+
+    rl.on("close", () => {
+      if (!stopped) flush();
+      resolve(count);
+    });
+
+    rl.on("error", (err) => {
+      reject(err);
+    });
+  });
 }
 
 /** Format bytes for display */

@@ -15,9 +15,8 @@
  *   ...repeated for each thread...
  */
 
-import * as fs from "fs/promises";
 import * as path from "path";
-import { resolveFileRefs } from "../lib/log-reader.js";
+import { resolveFileRefs, readRawLines } from "../lib/log-reader.js";
 
 interface PdFrame {
   address: string;
@@ -151,15 +150,12 @@ export async function toolGetPdCrashes(
 
   for (const fullPath of paths) {
     const filename = path.basename(fullPath);
-    let raw: string;
+    let lines: string[];
     try {
-      raw = await fs.readFile(fullPath, "utf8");
-    } catch (e) {
+      lines = await readRawLines(fullPath);
+    } catch {
       continue;
     }
-    // Strip UTF-8 BOM if present
-    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
-    const lines = raw.split(/\r?\n/);
     const crashes = parsePdCrashes(lines, filename);
     allCrashes.push(...crashes);
   }

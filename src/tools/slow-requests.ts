@@ -1,19 +1,24 @@
+/**
+ * slow-requests.ts
+ *
+ * RPC-level slow request finder. Parses "took HH:MM:SS.fffffff" patterns
+ * in any Symphony log. Exported for use by the merged sym_http tool.
+ */
+
 import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
 import { parseTookMs } from "../lib/log-parser.js";
-import { findSlowHttpRequests } from "./search-http-requests.js";
 import * as path from "path";
 
 /** Extract the RPC method name from messages like
  *  "...Request(39)[CallRPC.Farm.Interfaces.IFoo.GetBars] for ip:port took..."
  *  "...Request(2)[WallGetPanels] for ip:port took..."
- * Uses greedy backtracking to always capture the final segment after the last dot.
  */
-function extractMethodName(message: string): string | null {
+export function extractMethodName(message: string): string | null {
   const m = /\[(?:[^\]]*\.)?(\w+)\]/.exec(message);
   return m?.[1] ?? null;
 }
 
-interface SlowRequest {
+export interface SlowRequest {
   file: string;
   timestamp: string;
   threadId: string;
@@ -22,37 +27,28 @@ interface SlowRequest {
   durationMs: number;
 }
 
-export async function toolGetSlowRequests(
+/** Find RPC-level slow requests (entries containing "took HH:MM:SS.fff") */
+export async function findSlowRpcRequests(
   logDir: string | string[],
-  args: {
-    files: string[];
-    thresholdMs?: number;
-    limit?: number;
-    sortBy?: "duration" | "time";
-    groupBy?: "request";
-    includeHttp?: boolean;
-    startTime?: string;
-    endTime?: string;
-  }
-): Promise<string> {
-  const thresholdMs = args.thresholdMs ?? 1000;
-  const limit = args.limit ?? 50;
-  const sortBy = args.sortBy ?? "duration";
-
+  files: string[],
+  thresholdMs: number,
+  startTime?: string,
+  endTime?: string,
+): Promise<SlowRequest[]> {
   const slow: SlowRequest[] = [];
-  const paths = await resolveFileRefs(args.files, logDir);
+  const paths = await resolveFileRefs(files, logDir);
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
     let entries;
     try {
       entries = await readLogEntries(fullPath);
-    } catch (e) {
+    } catch {
       continue;
     }
 
     for (const entry of entries) {
-      if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
+      if (!isInTimeWindow(entry.line.timestamp, startTime, endTime)) continue;
       const ms = parseTookMs(entry.line.message);
       if (ms === null || ms < thresholdMs) continue;
       slow.push({
@@ -66,29 +62,27 @@ export async function toolGetSlowRequests(
     }
   }
 
-  // Also scan for slow HTTP-layer requests (RequestLogger entries in IS files)
-  if (args.includeHttp) {
-    for (const fullPath of paths) {
-      const entries = await findSlowHttpRequests(fullPath, thresholdMs, args.startTime, args.endTime);
-      for (const e of entries) {
-        slow.push({
-          file: e.file,
-          timestamp: e.timestamp,
-          threadId: "-",
-          source: "RequestLogger (HTTP)",
-          message: `${e.method} ${e.path}  →  ${e.status ?? "?"}  took ${e.durationMs}ms`,
-          durationMs: e.durationMs,
-        });
-      }
-    }
+  return slow;
+}
+
+/** Format a list of SlowRequest objects into a readable report */
+export function formatSlowRequests(
+  slow: SlowRequest[],
+  opts: {
+    thresholdMs: number;
+    limit: number;
+    sortBy: "duration" | "time";
+    groupBy?: "request";
   }
+): string {
+  const { thresholdMs, limit, sortBy, groupBy } = opts;
 
   if (slow.length === 0) {
     return `No requests exceeding ${thresholdMs}ms found.`;
   }
 
   // ---- grouped output ----
-  if (args.groupBy === "request") {
+  if (groupBy === "request") {
     interface MethodGroup {
       count: number;
       totalMs: number;
@@ -122,7 +116,6 @@ export async function toolGetSlowRequests(
       for (const ex of g.examples) {
         out.push(`  [${ex.timestamp}] ${ex.message.slice(0, 180)}`);
       }
-      // Time distribution histogram
       const buckets = [...g.minuteBuckets.entries()].sort((a, b) => a[0].localeCompare(b[0]));
       if (buckets.length > 1) {
         const maxC = Math.max(...buckets.map(([, c]) => c));
@@ -139,13 +132,14 @@ export async function toolGetSlowRequests(
   }
 
   // ---- flat output ----
+  const sorted = [...slow];
   if (sortBy === "duration") {
-    slow.sort((a, b) => b.durationMs - a.durationMs);
+    sorted.sort((a, b) => b.durationMs - a.durationMs);
   } else {
-    slow.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    sorted.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   }
 
-  const shown = slow.slice(0, limit);
+  const shown = sorted.slice(0, limit);
 
   const out: string[] = [
     `Found ${slow.length} slow request(s) exceeding ${thresholdMs}ms (showing ${shown.length}, sorted by ${sortBy}):`,
@@ -166,11 +160,10 @@ export async function toolGetSlowRequests(
     out.push("");
   }
 
-  // Summary stats
   const durations = slow.map((r) => r.durationMs);
   const avg = durations.reduce((a, b) => a + b, 0) / durations.length;
   const max = Math.max(...durations);
-  const p95 = durations.sort((a, b) => a - b)[Math.floor(durations.length * 0.95)] ?? max;
+  const p95 = [...durations].sort((a, b) => a - b)[Math.floor(durations.length * 0.95)] ?? max;
 
   out.push("--- Statistics ---");
   out.push(`Total: ${slow.length}  Max: ${max}ms  Avg: ${avg.toFixed(0)}ms  P95: ${p95}ms`);

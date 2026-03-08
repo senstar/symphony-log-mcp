@@ -29,12 +29,24 @@ export async function toolCorrelateTimelines(
   const all: TaggedEntry[] = [];
   const resolvedPaths = await resolveFileRefs(args.files, logDir);
 
+  // In bug-report mode, determine server label from which dir a file came from
+  const serverLabelFor = (fullPath: string): string | undefined => {
+    if (!Array.isArray(logDir)) return undefined;
+    for (let i = 0; i < logDir.length; i++) {
+      if (fullPath.startsWith(logDir[i])) return `Server-${i + 1}`;
+    }
+    return undefined;
+  };
+
   for (const fullPath of resolvedPaths) {
     const filename = path.basename(fullPath);
     const parsed = parseLogFilename(filename);
     const prefix = parsed?.prefix ?? filename;
     const info = decodePrefix(prefix);
-    const label = `${prefix}(${info.description.split(" ")[0]})`;
+    const serverTag = serverLabelFor(fullPath);
+    const label = serverTag
+      ? `${serverTag}/${prefix}(${info.description.split(" ")[0]})`
+      : `${prefix}(${info.description.split(" ")[0]})`;
 
     let entries: LogEntry[];
     try {

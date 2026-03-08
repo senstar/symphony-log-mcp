@@ -9,7 +9,7 @@
  *   - Recording gaps
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
 import * as path from "path";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ interface VideoEvent {
 export async function toolVideoHealth(
   logDir: string | string[],
   args: {
-    files: string[];
+    files?: string[];
     startTime?: string;
     endTime?: string;
     limit?: number;
@@ -47,8 +47,12 @@ export async function toolVideoHealth(
   const limit = args.limit ?? 100;
   const mode = args.mode ?? "summary";
 
-  const paths = await resolveFileRefs(args.files, logDir);
-  if (paths.length === 0) return `No log files found for: ${args.files.join(", ")}`;
+  let files = args.files;
+  if (!files || files.length === 0) {
+    files = ["cs", "vcd", "hs"];
+  }
+  const paths = await resolveFileRefs(files, logDir);
+  if (paths.length === 0) return `No video health log files found. Try specifying files explicitly (cs*, vcd*, hs* prefixes).`;
 
   const events: VideoEvent[] = [];
 

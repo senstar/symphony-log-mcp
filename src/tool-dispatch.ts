@@ -6,18 +6,19 @@
 
 import type { LogContext } from "./types.js";
 
+import { toolTriage } from "./tools/triage.js";
 import { toolListLogFiles } from "./tools/list-logs.js";
 import { toolSearchErrors } from "./tools/search-errors.js";
 import { toolSearchPattern } from "./tools/search-pattern.js";
 import { toolGetStackTraces } from "./tools/stack-traces.js";
-import { toolGetServiceLifecycle } from "./tools/service-lifecycle.js";
+import { toolGetServiceLifecycle, toolDetectLogGaps } from "./tools/service-lifecycle.js";
 import { toolGetUiThreadActivity } from "./tools/ui-thread.js";
 import { toolCorrelateTimelines } from "./tools/correlate-timeline.js";
 import { toolGetProcessLifetimes } from "./tools/process-lifetimes.js";
 import { toolGetPdCrashes } from "./tools/pd-crashes.js";
 import { toolTraceMbRequest } from "./tools/trace-mb-request.js";
 import { toolSearchHttpRequests } from "./tools/search-http-requests.js";
-import { toolSummarizeHealth } from "./tools/summarize-health.js";
+import { toolSummarizeHealth, toolMemoryTrends } from "./tools/summarize-health.js";
 import { toolCompareLogs } from "./tools/compare-logs.js";
 import { toolDbTables } from "./tools/db-tables.js";
 import { toolVideoHealth } from "./tools/video-health.js";
@@ -47,6 +48,16 @@ export async function dispatchToolCall(
   logDirRaw: string,
 ): Promise<string> {
   switch (name) {
+    // ---- sym_triage ----
+    case "sym_triage":
+      return await toolTriage(ctx.dirs, ctx.bugReport, {
+        sccpFiles:      a.sccpFiles      as string[] | undefined,
+        errorFiles:     a.errorFiles     as string[] | undefined,
+        lifecycleFiles: a.lifecycleFiles as string[] | undefined,
+        startTime:      a.startTime      as string | undefined,
+        endTime:        a.endTime        as string | undefined,
+      });
+
     // ---- sym_info: bug_report + list_files + decode_prefix + hardware ----
     case "sym_info": {
       const action = a.action as string;
@@ -185,6 +196,14 @@ export async function dispatchToolCall(
           endTime:      a.endTime      as string | undefined,
           limit:        a.limit        as number | undefined,
         });
+      } else if (mode === "gaps") {
+        return await toolDetectLogGaps(ctx.dirs, {
+          files:           a.files           as string[],
+          gapThresholdSec: a.gapThresholdSec as number | undefined,
+          startTime:       a.startTime       as string | undefined,
+          endTime:         a.endTime         as string | undefined,
+          limit:           a.limit           as number | undefined,
+        });
       }
       throw new Error(`sym_lifecycle: unknown mode '${mode}'`);
     }
@@ -227,7 +246,6 @@ export async function dispatchToolCall(
         clientIp:           a.clientIp           as string | undefined,
         statusFilter:       a.statusFilter       as (number | string)[] | undefined,
         groupBy:            a.groupBy            as "path" | "client" | "status" | "statusClass" | undefined,
-        totalsOnly:         a.totalsOnly         as boolean | undefined,
         sortBy:             a.sortBy             as "avg" | "max" | "count" | "errors" | "duration" | "time" | undefined,
         rateBy:             a.rateBy             as "minute" | "5min" | "hour" | undefined,
         isAssets:           a.isAssets           as boolean | undefined,
@@ -248,13 +266,24 @@ export async function dispatchToolCall(
         endTime:           a.endTime            as string | undefined,
       });
 
-    case "sym_health":
+    case "sym_health": {
+      const mode = (a.mode as string) ?? "dashboard";
+      if (mode === "trends") {
+        return await toolMemoryTrends(ctx.dirs, {
+          sccpFiles: a.sccpFiles as string[],
+          filter:    a.filter    as string | undefined,
+          startTime: a.startTime as string | undefined,
+          endTime:   a.endTime   as string | undefined,
+          limit:     a.limit     as number | undefined,
+        });
+      }
       return await toolSummarizeHealth(ctx.dirs, {
         sccpFiles:  a.sccpFiles  as string[],
         errorFiles: a.errorFiles as string[] | undefined,
         startTime:  a.startTime  as string | undefined,
         endTime:    a.endTime    as string | undefined,
       });
+    }
 
     case "sym_compare":
       return await toolCompareLogs(ctx.dirs, {
@@ -283,7 +312,7 @@ export async function dispatchToolCall(
 
     case "sym_video_health":
       return await toolVideoHealth(ctx.dirs, {
-        files:     a.files     as string[],
+        files:     a.files     as string[] | undefined,
         mode:      a.mode      as "summary" | "events" | "cameras" | undefined,
         startTime: a.startTime as string | undefined,
         endTime:   a.endTime   as string | undefined,
@@ -292,7 +321,7 @@ export async function dispatchToolCall(
 
     case "sym_storage":
       return await toolStorage(ctx.dirs, {
-        files:     a.files     as string[],
+        files:     a.files     as string[] | undefined,
         mode:      a.mode      as "summary" | "events" | "timeline" | undefined,
         startTime: a.startTime as string | undefined,
         endTime:   a.endTime   as string | undefined,
@@ -301,7 +330,7 @@ export async function dispatchToolCall(
 
     case "sym_alarms":
       return await toolAlarms(ctx.dirs, {
-        files:     a.files     as string[],
+        files:     a.files     as string[] | undefined,
         mode:      a.mode      as "summary" | "events" | "failures" | undefined,
         startTime: a.startTime as string | undefined,
         endTime:   a.endTime   as string | undefined,
@@ -310,7 +339,7 @@ export async function dispatchToolCall(
 
     case "sym_network":
       return await toolNetwork(ctx.dirs, {
-        files:        a.files        as string[],
+        files:        a.files        as string[] | undefined,
         mode:         a.mode         as "summary" | "events" | "targets" | "timeouts" | undefined,
         targetFilter: a.targetFilter as string | undefined,
         startTime:    a.startTime    as string | undefined,
@@ -320,7 +349,7 @@ export async function dispatchToolCall(
 
     case "sym_access_control":
       return await toolAccessControl(ctx.dirs, {
-        files:     a.files     as string[],
+        files:     a.files     as string[] | undefined,
         mode:      a.mode      as "summary" | "events" | "failures" | "sync" | undefined,
         startTime: a.startTime as string | undefined,
         endTime:   a.endTime   as string | undefined,

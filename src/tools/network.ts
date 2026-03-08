@@ -8,7 +8,7 @@
  *   - Build a connectivity timeline across services
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
 import { fingerprint } from "../lib/fingerprint.js";
 import * as path from "path";
 
@@ -38,7 +38,7 @@ interface NetworkEvent {
 export async function toolNetwork(
   logDir: string | string[],
   args: {
-    files: string[];
+    files?: string[];
     startTime?: string;
     endTime?: string;
     limit?: number;
@@ -50,8 +50,13 @@ export async function toolNetwork(
   const mode = args.mode ?? "summary";
   const targetFilter = args.targetFilter?.toLowerCase();
 
-  const paths = await resolveFileRefs(args.files, logDir);
-  if (paths.length === 0) return `No log files found for: ${args.files.join(", ")}`;
+  let files = args.files;
+  if (!files || files.length === 0) {
+    const allFiles = await listLogFiles(logDir);
+    files = [...new Set(allFiles.map(f => f.prefix))];
+  }
+  const paths = await resolveFileRefs(files, logDir);
+  if (paths.length === 0) return `No log files found in the log directory.`;
 
   const events: NetworkEvent[] = [];
 

@@ -36,6 +36,9 @@ export interface LogLine {
   timestampMs: number;
   threadId: string;
   level: LogLevel;
+  /** Original 8-character level string from the log (e.g. "Tracker ", "Classifi", "Diagnost").
+   *  Preserves sub-diagnostic levels that are normalized to "Verbose" in the `level` field. */
+  rawLevel: string;
   /** e.g. "WebService", "Communication" — may be empty */
   functionalArea: string;
   /** e.g. "WebServiceRequestProcessor.ProcessRequest" */
@@ -192,6 +195,7 @@ export function parseLogLine(raw: string, lineNumber: number): LogLine | null {
     timestampMs,
     threadId,
     level,
+    rawLevel: levelRaw.trim(),
     functionalArea,
     source,
     sourceContext,

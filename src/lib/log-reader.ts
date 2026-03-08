@@ -310,6 +310,33 @@ export async function streamLogEntries(
   });
 }
 
+/**
+ * Build a helpful "no files found" error message showing what was searched
+ * and what prefixes are available in the log directory.
+ */
+export async function buildNoFilesFoundMessage(
+  fileRefs: string[],
+  logDir: string | string[],
+): Promise<string> {
+  const dirs = Array.isArray(logDir) ? logDir : [logDir];
+  const allFiles = await listLogFiles(dirs);
+  const availablePrefixes = [...new Set(allFiles.map(f => f.prefix))].sort();
+
+  const lines = [
+    `No log files found matching: ${fileRefs.join(", ")}`,
+    `Searched ${dirs.length} director${dirs.length > 1 ? "ies" : "y"}:`,
+    ...dirs.map(d => `  ${d}`),
+  ];
+
+  if (availablePrefixes.length > 0) {
+    lines.push(`Available prefixes (${availablePrefixes.length}): ${availablePrefixes.join(", ")}`);
+  } else {
+    lines.push("No Symphony log files found in the search directories.");
+  }
+
+  return lines.join("\n");
+}
+
 /** Format bytes for display */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

@@ -1,12 +1,32 @@
 /**
  * tool-registry.ts
  *
- * MCP tool definitions (name, description, inputSchema) for all 18 Symphony log tools.
+ * MCP tool definitions (name, description, inputSchema) for all 19 Symphony log tools.
  * Pure data — no handler logic.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const TOOLS: any[] = [
+  {
+    name: "sym_triage",
+    description:
+      "Automated first-pass diagnosis of a Symphony log set. " +
+      "Runs health analysis, error grouping, service lifecycle, and Windows event log checks in parallel, " +
+      "then produces a prioritized list of findings ranked by severity (CRITICAL/WARNING/INFO) with " +
+      "drill-down hints pointing to the right tool for deeper investigation. " +
+      "Start here when diagnosing an unfamiliar bug report or log set.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sccpFiles:      { type: "array", items: { type: "string" }, description: "sccp log file(s) for process health (default: auto-detect)" },
+        errorFiles:     { type: "array", items: { type: "string" }, description: "IS or other log files for error analysis (default: auto-detect)" },
+        lifecycleFiles: { type: "array", items: { type: "string" }, description: "Log files for lifecycle events (default: auto-detect)" },
+        startTime:      { type: "string", description: "Only include data at or after HH:MM:SS" },
+        endTime:        { type: "string", description: "Only include data at or before HH:MM:SS" },
+      },
+      required: [],
+    },
+  },
   {
     name: "sym_info",
     description:
@@ -85,21 +105,23 @@ export const TOOLS: any[] = [
       "Modes: " +
       "'services' — find service start, stop, restart, and failover events. Surfaces causes: DB reconnects, ping failures, buddy/failover. Startup chatter is suppressed. " +
       "'processes' — parse sccp logs to track process lifetimes by PID. Detects restarts, uptime per instance, memory/CPU trends. " +
+      "'gaps' — detect time periods where log files went silent (no entries). Reports gaps exceeding a configurable threshold. Useful for finding service outages, hangs, or crashes. " +
       "Use 'services' for application-level events, 'processes' for OS-level process tracking.",
     inputSchema: {
       type: "object",
       properties: {
-        mode:         { type: "string", enum: ["services", "processes"], description: "'services' for app-level events, 'processes' for PID-level tracking from sccp logs" },
-        files:        { type: "array", items: { type: "string" }, description: "Log files. For processes mode, use sccp-*.txt files." },
-        includePings: { type: "boolean", description: "For services: include inter-server ALIVE/PING messages (default false)" },
-        symphonyOnly: { type: "boolean", description: "For processes: only Symphony processes (default true)" },
-        filter:       { type: "string",  description: "For processes: filter by process name substring, e.g. 'Tracker'" },
-        showAll:      { type: "boolean", description: "For processes: show all, not just restarted (default false)" },
-        startTime:    { type: "string", description: "Only include events at or after HH:MM:SS" },
-        endTime:      { type: "string", description: "Only include events at or before HH:MM:SS" },
-        limit:        { type: "number", description: "Max results (default 200 for services, 100 for processes)" },
+        mode:            { type: "string", enum: ["services", "processes", "gaps"], description: "'services' for app-level events, 'processes' for PID-level tracking, 'gaps' for log silence detection" },
+        files:           { type: "array", items: { type: "string" }, description: "Log files. For processes mode, use sccp-*.txt files." },
+        includePings:    { type: "boolean", description: "For services: include inter-server ALIVE/PING messages (default false)" },
+        symphonyOnly:    { type: "boolean", description: "For processes: only Symphony processes (default true)" },
+        filter:          { type: "string",  description: "For processes: filter by process name substring, e.g. 'Tracker'" },
+        showAll:         { type: "boolean", description: "For processes: show all, not just restarted (default false)" },
+        gapThresholdSec: { type: "number", description: "For gaps mode: minimum gap in seconds to report (default 60)" },
+        startTime:       { type: "string", description: "Only include events at or after HH:MM:SS" },
+        endTime:         { type: "string", description: "Only include events at or before HH:MM:SS" },
+        limit:           { type: "number", description: "Max results (default 200 for services, 100 for processes)" },
       },
-      required: ["mode", "files"],
+      required: ["mode"],
     },
   },
   {
@@ -153,7 +175,6 @@ export const TOOLS: any[] = [
         groupBy:            { type: "string", enum: ["path", "client", "status", "statusClass"], description: "Aggregation mode" },
         sortBy:             { type: "string", enum: ["avg", "max", "count", "errors", "duration", "time"], description: "Sort order (default 'max')" },
         rateBy:             { type: "string", enum: ["minute", "5min", "hour"], description: "Rate histogram interval" },
-        totalsOnly:         { type: "boolean", description: "Single-line totals summary only" },
         isAssets:           { type: "boolean", description: "Include /assets/ and /bundles/ (default false)" },
         detectActiveWindow: { type: "boolean", description: "Auto-detect busiest window" },
         startTime:          { type: "string",  description: "Only include requests at or after HH:MM:SS" },
@@ -190,12 +211,15 @@ export const TOOLS: any[] = [
     description:
       "Generate a health dashboard for a Symphony server from sccp process-lifetime data and IS error logs. " +
       "Shows per-process restart counts, pattern classification (stable/restarted/crash-loop/degrading), " +
-      "peak memory, and overall HEALTHY/DEGRADED/CRITICAL rating.",
+      "peak memory, and overall HEALTHY/DEGRADED/CRITICAL rating." +
+      " 'trends' mode shows per-process memory/CPU trajectory over time from sccp snapshots, flagging processes with >50% memory growth as potential leaks.",
     inputSchema: {
       type: "object",
       properties: {
         sccpFiles:  { type: "array", items: { type: "string" }, description: "sccp log file(s), e.g. 'sccp'" },
         errorFiles: { type: "array", items: { type: "string" }, description: "IS or other log files for error counts" },
+        mode:       { type: "string", enum: ["dashboard", "trends"], description: "'dashboard' (default) for health summary, 'trends' for memory/CPU trajectory" },
+        filter:     { type: "string", description: "For trends mode: filter by process name substring" },
         startTime:  { type: "string", description: "Only include data at or after HH:MM:SS" },
         endTime:    { type: "string", description: "Only include data at or before HH:MM:SS" },
       },
@@ -236,7 +260,7 @@ export const TOOLS: any[] = [
   {
     name: "sym_db_tables",
     description:
-      "Parse database table dumps from a Symphony bug report package. " +
+      "(Bug report only) Parse database table dumps from a Symphony bug report package. " +
       "Discovers and parses ASCII-bordered tables, TSV data, SQL output, and key-value config blocks. " +
       "Modes: " +
       "'summary' — overview of all discovered tables with row counts by category. " +
@@ -272,13 +296,13 @@ export const TOOLS: any[] = [
     inputSchema: {
       type: "object",
       properties: {
-        files:     { type: "array", items: { type: "string" }, description: "Log files — cs*, vcd*, hs* prefixes recommended" },
+        files:     { type: "array", items: { type: "string" }, description: "Log files (default: cs*, vcd*, hs* — auto-detected if omitted)" },
         mode:      { type: "string", enum: ["summary", "events", "cameras"], description: "Output mode (default 'summary')" },
         startTime: { type: "string", description: "Only include events at or after HH:MM:SS" },
         endTime:   { type: "string", description: "Only include events at or before HH:MM:SS" },
         limit:     { type: "number", description: "Max results (default 100)" },
       },
-      required: ["files"],
+      required: [],
     },
   },
   {
@@ -294,13 +318,13 @@ export const TOOLS: any[] = [
     inputSchema: {
       type: "object",
       properties: {
-        files:     { type: "array", items: { type: "string" }, description: "Log files — sccl* prefix recommended" },
+        files:     { type: "array", items: { type: "string" }, description: "Log files (default: sccl* — auto-detected if omitted)" },
         mode:      { type: "string", enum: ["summary", "events", "timeline"], description: "Output mode (default 'summary')" },
         startTime: { type: "string", description: "Only include events at or after HH:MM:SS" },
         endTime:   { type: "string", description: "Only include events at or before HH:MM:SS" },
         limit:     { type: "number", description: "Max results (default 100)" },
       },
-      required: ["files"],
+      required: [],
     },
   },
   {
@@ -316,13 +340,13 @@ export const TOOLS: any[] = [
     inputSchema: {
       type: "object",
       properties: {
-        files:     { type: "array", items: { type: "string" }, description: "Log files — scac* prefix recommended" },
+        files:     { type: "array", items: { type: "string" }, description: "Log files (default: scac* — auto-detected if omitted)" },
         mode:      { type: "string", enum: ["summary", "events", "failures"], description: "Output mode (default 'summary')" },
         startTime: { type: "string", description: "Only include events at or after HH:MM:SS" },
         endTime:   { type: "string", description: "Only include events at or before HH:MM:SS" },
         limit:     { type: "number", description: "Max results (default 100)" },
       },
-      required: ["files"],
+      required: [],
     },
   },
   {
@@ -338,14 +362,14 @@ export const TOOLS: any[] = [
     inputSchema: {
       type: "object",
       properties: {
-        files:        { type: "array", items: { type: "string" }, description: "Log files to analyze" },
+        files:        { type: "array", items: { type: "string" }, description: "Log files (default: all available — auto-detected if omitted)" },
         mode:         { type: "string", enum: ["summary", "events", "targets", "timeouts"], description: "Output mode (default 'summary')" },
         targetFilter: { type: "string", description: "Filter to specific IP or hostname" },
         startTime:    { type: "string", description: "Only include events at or after HH:MM:SS" },
         endTime:      { type: "string", description: "Only include events at or before HH:MM:SS" },
         limit:        { type: "number", description: "Max results (default 100)" },
       },
-      required: ["files"],
+      required: [],
     },
   },
   {
@@ -361,19 +385,19 @@ export const TOOLS: any[] = [
     inputSchema: {
       type: "object",
       properties: {
-        files:     { type: "array", items: { type: "string" }, description: "Log files — ac, aacl, lacl, ga prefixes recommended" },
+        files:     { type: "array", items: { type: "string" }, description: "Log files (default: ac, aacl, lacl, ga — auto-detected if omitted)" },
         mode:      { type: "string", enum: ["summary", "events", "failures", "sync"], description: "Output mode (default 'summary')" },
         startTime: { type: "string", description: "Only include events at or after HH:MM:SS" },
         endTime:   { type: "string", description: "Only include events at or before HH:MM:SS" },
         limit:     { type: "number", description: "Max results (default 100)" },
       },
-      required: ["files"],
+      required: [],
     },
   },
   {
     name: "sym_permissions",
     description:
-      "Resolve effective user permissions from Symphony bug report database dumps. " +
+      "(Bug report only) Resolve effective user permissions from Symphony bug report database dumps. " +
       "Handles the group-based permission model where Deny always overrides Grant. " +
       "Shows which groups cause each permission to be granted or denied — answers " +
       "'does this user have permission to do X?' with full audit trail. " +
@@ -398,7 +422,7 @@ export const TOOLS: any[] = [
   {
     name: "sym_system",
     description:
-      "Analyze supplementary system diagnostic files from a Symphony bug report package. " +
+      "(Bug report only) Analyze supplementary system diagnostic files from a Symphony bug report package. " +
       "These files are captured by LogPackage.cs alongside the log files and provide host-level context. " +
       "Modes: " +
       "'overview' — combined summary: OS, hardware, Symphony services status, key ports, license, database stats. " +
@@ -427,7 +451,7 @@ export const TOOLS: any[] = [
   {
     name: "sym_event_log",
     description:
-      "Parse Windows Event Log exports from a Symphony bug report package. " +
+      "(Bug report only) Parse Windows Event Log exports from a Symphony bug report package. " +
       "LogPackage.cs captures the last 14 days of Application and System event logs as text files. " +
       "Invaluable for diagnosing service crashes, driver failures, disk errors, and .NET runtime " +
       "exceptions that occur outside Symphony's own log files. " +

@@ -178,8 +178,6 @@ export interface SearchHttpArgs {
   endTime?: string;
   limit?: number;
   isAssets?: boolean;      // include /assets/ and /bundles/ static file requests (default false)
-  /** Return just a status-class summary table (2xx/3xx/4xx/5xx + error rate) without the full listing. */
-  totalsOnly?: boolean;
 }
 
 export async function toolSearchHttpRequests(
@@ -200,7 +198,6 @@ export async function toolSearchHttpRequests(
     endTime,
     limit = 100,
     isAssets = false,
-    totalsOnly = false,
   } = args;
 
   const toolMode = args.mode ?? "requests";
@@ -245,7 +242,7 @@ export async function toolSearchHttpRequests(
   }
 
   // ── "totals" shortcut mode ──────────────────────────────────────────────
-  // (fall through to normal processing with totalsOnly flag)
+  // (fall through to normal processing)
 
   // ── "rates" shortcut mode ───────────────────────────────────────────────
   // (fall through to normal processing with rateBy flag)
@@ -317,7 +314,7 @@ export async function toolSearchHttpRequests(
   }
 
   // ── totalsOnly mode ─────────────────────────────────────────────────────────
-  if (totalsOnly) {
+  if (toolMode === "totals") {
     const cls = { "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "???": 0 };
     let totalDurationMs = 0, durationCount = 0;
     for (const r of filtered) {

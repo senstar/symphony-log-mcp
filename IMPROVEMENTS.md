@@ -1,5 +1,98 @@
 # Symphony Log MCP — Improvement Plan
 
+## v2.1.0 Enhancement Plan (2026-03-08)
+
+### Overview
+
+Nine improvements organized into 3 new capabilities, 4 UX improvements, and 2 library fixes. All additions maintain backward compatibility with existing tool interfaces.
+
+### New Capabilities
+
+| # | Item | Scope | Value |
+|---|------|-------|-------|
+| 1 | **`sym_triage`** — automated first-pass diagnosis | New tool | HIGH |
+| 2 | **Log gap / outage detection** — `sym_lifecycle` mode="gaps" | New mode | HIGH |
+| 3 | **Memory/resource trend analysis** — `sym_health` mode="trends" | New mode | MED-HIGH |
+
+### UX Improvements
+
+| # | Item | Scope | Value |
+|---|------|-------|-------|
+| 4 | Auto-select files by prefix (5 keyword tools) | Schema change | MED |
+| 5 | Remove redundant `totalsOnly` from `sym_http` | Cleanup | LOW |
+| 6 | Label bug-report-only tools in descriptions | Text | LOW |
+| 7 | Add server labels to `sym_timeline correlate` output | Output fix | LOW |
+
+### Library Fixes
+
+| # | Item | Scope | Value |
+|---|------|-------|-------|
+| 8 | Preserve sub-diagnostic log levels (`rawLevel` field) | Parser | MED |
+| 9 | Better `resolveFileRefs` error messages (show searched dirs) | Library | LOW |
+
+---
+
+### 1. `sym_triage` — Automated First-Pass Diagnosis
+
+Single tool call that runs 5 analyses in parallel and produces a prioritized finding list:
+- Bug report metadata (version, farm, error time)
+- Health summary from sccp (crash-loops, restarts, memory)
+- Top errors from IS logs (deduplicated, counted)
+- Service lifecycle events (restarts, failover)
+- Windows Event Log critical/error entries (if bug report)
+
+Output: ranked findings with severity (CRITICAL/WARNING/INFO) and pointers to drill-down tools.
+
+### 2. Log Gap / Outage Detection
+
+New `sym_lifecycle` mode="gaps" that detects periods where services went silent:
+- Scan log files by prefix, find timestamp gaps exceeding threshold (default 60s)
+- Report: service, gap start, gap end, duration
+- Distinguishes expected gaps (log rollover) from unexpected ones (crash/hang)
+- Works across multiple files of the same prefix
+
+### 3. Memory/Resource Trend Analysis
+
+New `sym_health` mode="trends" that shows per-process resource usage over time:
+- Parse sccp snapshot data for memory (working set) and CPU over time
+- Output: process name, start→end memory, growth rate, peak time
+- Flag processes with >50% memory growth as potential leaks
+- Tabular output sorted by growth rate
+
+### 4. Auto-Select Files by Prefix
+
+Make `files` parameter optional on 5 keyword-matched tools with smart defaults:
+- `sym_video_health` → cs*, vcd*, hs*
+- `sym_storage` → sccl*
+- `sym_alarms` → scac*
+- `sym_network` → all available log files
+- `sym_access_control` → ac*, aacl*, lacl*, ga*
+
+When `files` is omitted, auto-discover matching files from the log directory.
+
+### 5. Remove `totalsOnly` from `sym_http`
+
+The `totalsOnly: boolean` parameter is redundant with `mode: "totals"`. Remove it.
+
+### 6. Bug-Report-Only Tool Labeling
+
+Prepend "(Bug report only)" to descriptions of 4 tools that require bug report packages:
+- `sym_system`, `sym_event_log`, `sym_permissions`, `sym_db_tables`
+
+### 7. Server Labels in Correlate Output
+
+In bug-report mode with multiple servers, tag each correlated timeline entry with its server label (e.g., `[Server-10.1.2.3]`) alongside the file prefix.
+
+### 8. Preserve Sub-Diagnostic Log Levels
+
+Add `rawLevel` field to `LogEntry` preserving the original 8-char level string. The normalized `level` field continues to map sub-diagnostics to "Verbose", but tools can now filter on specific sub-levels like "Tracker" or "PTZ".
+
+### 9. Better resolveFileRefs Error Messages
+
+When `resolveFileRefs` finds no matching files, include the searched directories and available prefixes in the error message.
+
+---
+
 ## v2.0.0 Changelog
 
 ### Source-Verified Accuracy Overhaul

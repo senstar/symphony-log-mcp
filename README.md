@@ -8,10 +8,11 @@ A Model Context Protocol (MCP) server for automated analysis of Symphony VMS log
 
 ## Features
 
+- **Automated triage** - Single-call first-pass diagnosis that runs health, errors, lifecycle, and event log checks in parallel with prioritized findings
 - **Side-by-side log comparison** - Compare two builds or environments with automatic detection of fixed/new/changed error patterns
 - **Error pattern analysis** - Fingerprint and deduplicate errors, with full stack trace extraction
 - **Process health monitoring** - Detect crash-loops, restarts, and memory trends from sccp logs
-- **Service lifecycle tracking** - Find start/stop/restart events and diagnose restart causes
+- **Service lifecycle tracking** - Find start/stop/restart events, diagnose restart causes, and detect log gaps
 - **HTTP & slow request analysis** - Unified HTTP + RPC slow request analysis with grouping, rate histograms, and threshold detection
 - **Video pipeline health** - Camera connection/disconnection, frame drops, codec errors, recording gaps
 - **Storage management** - Disk space warnings, retention enforcement, cleaner cycle tracking
@@ -88,36 +89,40 @@ Once configured, you can ask your AI assistant natural language questions like:
 
 - "Compare the logs from tests 133 and 138 and summarize the differences"
 - "What are the most common errors in the InfoService logs?"
+- "Triage this bug report and tell me what's wrong"
 - "Show me the process health for this bug report"
 - "Find all slow requests over 5 seconds"
+- "Are there any log gaps that suggest a service outage?"
+- "Show me memory trends — are any processes leaking?"
 - "What caused InfoService to restart at 14:23?"
 
 The AI assistant will automatically invoke the appropriate MCP tools and interpret the results for you.
 
-## Available Tools (18)
+## Available Tools (19)
 
 All tools use the `sym_` prefix for easy discovery.
 
 | Tool | Description |
 |------|-------------|
+| `sym_triage` | **Start here.** Automated first-pass diagnosis — runs health, error, lifecycle, and event log checks in parallel, returns prioritized findings |
 | `sym_info` | Bug report metadata, list log files, decode prefixes, hardware config (action: `bug_report` \| `list_files` \| `decode_prefix` \| `hardware`) |
 | `sym_search` | Search for errors or text/regex patterns (mode: `errors` \| `pattern`) |
 | `sym_crashes` | Extract .NET exceptions or native C++ crash dumps (mode: `managed` \| `native`) |
-| `sym_lifecycle` | Service start/stop/restart events or process-level PID tracking (mode: `services` \| `processes`) |
+| `sym_lifecycle` | Service start/stop/restart events, process-level PID tracking, or log gap detection (mode: `services` \| `processes` \| `gaps`) |
 | `sym_timeline` | Merge logs chronologically or trace RPC calls across Mo→IS (mode: `correlate` \| `trace_rpc`) |
 | `sym_http` | Unified HTTP + RPC request analysis with slow-request detection (mode: `requests` \| `slow` \| `rates` \| `totals`) |
 | `sym_ui_thread` | Detect UI thread freezes and deadlocks with multi-file support, configurable freeze threshold, and time filtering |
-| `sym_health` | Generate process health dashboard (HEALTHY / DEGRADED / CRITICAL) |
+| `sym_health` | Health dashboard or memory/CPU trends from sccp logs (mode: `dashboard` \| `trends`) |
 | `sym_compare` | Side-by-side diff of two log directories (errors, lifecycle, health, http, slow) |
-| `sym_db_tables` | Parse database table dumps from bug reports (mode: `summary` \| `cameras` \| `servers` \| `settings` \| `users` \| `licenses` \| `settings_xml` \| `raw`) |
+| `sym_db_tables` | *(Bug report only)* Parse database table dumps (mode: `summary` \| `cameras` \| `servers` \| `settings` \| `users` \| `licenses` \| `settings_xml` \| `raw`) |
 | `sym_video_health` | Video pipeline health: camera connect/disconnect, frame drops, codec errors, recording gaps (mode: `summary` \| `events` \| `cameras`) |
 | `sym_storage` | Disk/storage management: space warnings, retention, cleaner cycles (mode: `summary` \| `events` \| `timeline`) |
 | `sym_alarms` | Alarm & event rule processing: triggers, notifications, rule failures (mode: `summary` \| `events` \| `failures`) |
 | `sym_network` | Network connectivity: timeouts, retries, connection refused, DNS (mode: `summary` \| `events` \| `targets` \| `timeouts`) |
 | `sym_access_control` | Access control integration: doors, credentials, sync, panel comms (mode: `summary` \| `events` \| `failures` \| `sync`) |
-| `sym_permissions` | Resolve effective user permissions with full audit trail — handles group inheritance and deny-overrides-grant (mode: `resolve` \| `check` \| `groups` \| `rights` \| `raw`) |
-| `sym_system` | System diagnostics from bug report supplementary files — OS, services, processes, network, environment, license, files, database (mode: `overview` \| `services` \| `processes` \| `network` \| `environment` \| `license` \| `files` \| `db_summary` \| `raw`) |
-| `sym_event_log` | Parse Windows Event Log exports (Application/System) from bug reports — crashes, driver failures, .NET runtime errors (mode: `entries` \| `summary`) |
+| `sym_permissions` | *(Bug report only)* Resolve effective user permissions with full audit trail (mode: `resolve` \| `check` \| `groups` \| `rights` \| `raw`) |
+| `sym_system` | *(Bug report only)* System diagnostics from supplementary files (mode: `overview` \| `services` \| `processes` \| `network` \| `environment` \| `license` \| `files` \| `db_summary` \| `raw`) |
+| `sym_event_log` | *(Bug report only)* Parse Windows Event Log exports — crashes, driver failures, .NET runtime errors (mode: `entries` \| `summary`) |
 
 ## Resources
 

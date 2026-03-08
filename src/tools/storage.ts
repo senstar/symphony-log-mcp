@@ -8,7 +8,7 @@
  *   - Deletion rate and cleanup patterns
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
 import * as path from "path";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ interface StorageEvent {
 export async function toolStorage(
   logDir: string | string[],
   args: {
-    files: string[];
+    files?: string[];
     startTime?: string;
     endTime?: string;
     limit?: number;
@@ -45,8 +45,12 @@ export async function toolStorage(
   const limit = args.limit ?? 100;
   const mode = args.mode ?? "summary";
 
-  const paths = await resolveFileRefs(args.files, logDir);
-  if (paths.length === 0) return `No log files found for: ${args.files.join(", ")}`;
+  let files = args.files;
+  if (!files || files.length === 0) {
+    files = ["sccl"];
+  }
+  const paths = await resolveFileRefs(files, logDir);
+  if (paths.length === 0) return `No storage log files found. Try specifying files explicitly (sccl* prefix).`;
 
   const events: StorageEvent[] = [];
 

@@ -8,7 +8,7 @@
  *   - Connection lifecycle with external AC systems
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
 import { fingerprint } from "../lib/fingerprint.js";
 import * as path from "path";
 
@@ -35,7 +35,7 @@ interface AccessControlEvent {
 export async function toolAccessControl(
   logDir: string | string[],
   args: {
-    files: string[];
+    files?: string[];
     startTime?: string;
     endTime?: string;
     limit?: number;
@@ -45,8 +45,12 @@ export async function toolAccessControl(
   const limit = args.limit ?? 100;
   const mode = args.mode ?? "summary";
 
-  const paths = await resolveFileRefs(args.files, logDir);
-  if (paths.length === 0) return `No log files found for: ${args.files.join(", ")}`;
+  let files = args.files;
+  if (!files || files.length === 0) {
+    files = ["ac", "aacl", "lacl", "ga"];
+  }
+  const paths = await resolveFileRefs(files, logDir);
+  if (paths.length === 0) return `No access control log files found. Try specifying files explicitly (ac, aacl, lacl, ga prefixes).`;
 
   const events: AccessControlEvent[] = [];
 

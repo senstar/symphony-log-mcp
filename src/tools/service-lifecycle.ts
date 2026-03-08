@@ -1,4 +1,5 @@
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import * as path from "path";
+import { readLogEntries, resolveFileRefs, isInTimeWindow, parseLogFilename } from "../lib/log-reader.js";
 import type { LogEntry } from "../lib/log-parser.js";
 import { fingerprintShort } from "../lib/fingerprint.js";
 
@@ -204,4 +205,136 @@ export async function toolGetServiceLifecycle(
   out.push(`  Starts: ${counts.start}  Stops: ${counts.stop}  Restart causes: ${counts["restart-reason"]} (${causeGroups.size} unique pattern(s))  Pings: ${counts.ping}`);
 
   return out.join("\n");
+}
+
+/* ------------------------------------------------------------------ */
+/*  toolDetectLogGaps — find periods of silence in log files           */
+/* ------------------------------------------------------------------ */
+
+interface LogGap {
+  prefix: string;
+  gapStart: string;
+  gapEnd: string;
+  durationSec: number;
+}
+
+function formatDuration(sec: number): string {
+  if (sec >= 3600) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return `${h}h ${m.toString().padStart(2, "0")}m`;
+  }
+  if (sec >= 60) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}m ${s.toString().padStart(2, "0")}s`;
+  }
+  return `${Math.floor(sec)}s`;
+}
+
+export async function toolDetectLogGaps(
+  logDir: string | string[],
+  args: {
+    files: string[];
+    gapThresholdSec?: number;
+    startTime?: string;
+    endTime?: string;
+    limit?: number;
+  }
+): Promise<string> {
+  const gapThresholdSec = args.gapThresholdSec ?? 60;
+  const limit = args.limit ?? 50;
+  const thresholdMs = gapThresholdSec * 1000;
+
+  const paths = await resolveFileRefs(args.files, logDir);
+
+  // Group files by prefix
+  const prefixGroups = new Map<string, string[]>();
+  for (const fullPath of paths) {
+    const basename = path.basename(fullPath);
+    const parsed = parseLogFilename(basename);
+    const prefix = parsed?.prefix ?? basename;
+    let group = prefixGroups.get(prefix);
+    if (!group) {
+      group = [];
+      prefixGroups.set(prefix, group);
+    }
+    group.push(fullPath);
+  }
+
+  const allGaps: LogGap[] = [];
+
+  for (const [prefix, files] of prefixGroups) {
+    // Collect all entries across all files in this prefix group
+    const allEntries: LogEntry[] = [];
+    for (const filePath of files) {
+      try {
+        const entries = await readLogEntries(filePath);
+        allEntries.push(...entries);
+      } catch {
+        continue;
+      }
+    }
+
+    if (allEntries.length < 2) continue;
+
+    // Sort by timestampMs
+    allEntries.sort((a, b) => a.line.timestampMs - b.line.timestampMs);
+
+    // Walk through and detect gaps
+    for (let i = 1; i < allEntries.length; i++) {
+      const prev = allEntries[i - 1];
+      const next = allEntries[i];
+
+      // Skip midnight rollover (next < prev)
+      if (next.line.timestampMs < prev.line.timestampMs) continue;
+
+      const delta = next.line.timestampMs - prev.line.timestampMs;
+      if (delta > thresholdMs) {
+        allGaps.push({
+          prefix,
+          gapStart: prev.line.timestamp,
+          gapEnd: next.line.timestamp,
+          durationSec: delta / 1000,
+        });
+      }
+    }
+  }
+
+  // Apply time window filter on gapStart
+  const filtered = allGaps.filter((g) =>
+    isInTimeWindow(g.gapStart, args.startTime, args.endTime)
+  );
+
+  if (filtered.length === 0) {
+    return `No log gaps exceeding ${gapThresholdSec}s threshold found in ${prefixGroups.size} service prefix(es).`;
+  }
+
+  // Sort by duration descending
+  filtered.sort((a, b) => b.durationSec - a.durationSec);
+  const shown = filtered.slice(0, limit);
+
+  // Collect unique services in result
+  const services = new Set(shown.map((g) => g.prefix));
+
+  // Format table
+  const lines: string[] = [
+    `Log Gaps Report — ${filtered.length} gap(s) exceeding ${gapThresholdSec}s threshold across ${services.size} service(s)`,
+    "",
+    "  DURATION     SERVICE      GAP START       GAP END",
+    "  ─────────────────────────────────────────────────────",
+  ];
+
+  for (const g of shown) {
+    const dur = formatDuration(g.durationSec).padEnd(12);
+    const svc = g.prefix.padEnd(12);
+    lines.push(`  ${dur} ${svc} ${g.gapStart.padEnd(15)} ${g.gapEnd}`);
+  }
+
+  if (filtered.length > limit) {
+    lines.push("");
+    lines.push(`  … ${filtered.length - limit} more gap(s) not shown (limit ${limit})`);
+  }
+
+  return lines.join("\n");
 }

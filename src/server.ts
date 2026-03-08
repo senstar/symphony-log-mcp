@@ -27,6 +27,8 @@ import { toolAlarms } from "./tools/alarms.js";
 import { toolNetwork } from "./tools/network.js";
 import { toolAccessControl } from "./tools/access-control.js";
 import { toolPermissions } from "./tools/permissions.js";
+import { toolSystemDiag } from "./tools/system-diagnostics.js";
+import { toolEventLog } from "./tools/event-log.js";
 import { decodePrefix, listKnownPrefixes } from "./lib/prefix-map.js";
 import { isBugReportFolder, extractBugReport, type BugReport } from "./lib/bug-report.js";
 import { getHardwareConfig, formatHardwareConfig } from "./lib/config-parser.js";
@@ -313,12 +315,15 @@ const TOOLS = [
       "'settings' — system settings and feature flags. " +
       "'users' — user accounts, roles, auth methods. " +
       "'licenses' — license entitlements and features. " +
+      "'settings_xml' — parse TableSettings.xml for structured settings with section/key filtering. " +
       "'raw' — show raw parsed table data, optionally filtered by table name.",
     inputSchema: {
       type: "object",
       properties: {
-        mode:      { type: "string", enum: ["summary", "cameras", "servers", "settings", "users", "licenses", "raw"], description: "What category of data to extract" },
+        mode:      { type: "string", enum: ["summary", "cameras", "servers", "settings", "users", "licenses", "settings_xml", "raw"], description: "What category of data to extract" },
         tableName: { type: "string", description: "For raw mode: filter by table name substring" },
+        section:   { type: "string", description: "For settings_xml: filter by section name substring" },
+        key:       { type: "string", description: "For settings_xml: filter by key name substring" },
         limit:     { type: "number", description: "Max rows to return (default 100)" },
       },
       required: ["mode"],
@@ -453,6 +458,59 @@ const TOOLS = [
         limit:      { type: "number", description: "Max rows in raw output (default 50)" },
       },
       required: ["mode"],
+    },
+  },
+  {
+    name: "sym_system",
+    description:
+      "Analyze supplementary system diagnostic files from a Symphony bug report package. " +
+      "These files are captured by LogPackage.cs alongside the log files and provide host-level context. " +
+      "Modes: " +
+      "'overview' — combined summary: OS, hardware, Symphony services status, key ports, license, database stats. " +
+      "'services' — Windows services from sc queryex output. Use symphonyOnly=true to filter to Symphony services. " +
+      "'processes' — running processes from tasklist /V with memory/CPU. " +
+      "'network' — ipconfig + netstat: adapters, IPs, listening ports, active connections. Filter by port number. " +
+      "'environment' — environment variables. " +
+      "'license' — license info and shared memory (printshmem). " +
+      "'files' — installed file listing from dir.txt with sizes and versions. " +
+      "'db_summary' — database table list with row counts. " +
+      "'raw' — dump any supplementary file as-is (omit file= to list available files).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode:         { type: "string", enum: ["overview", "services", "processes", "network", "environment", "license", "files", "db_summary", "raw"], description: "What system information to show" },
+        filter:       { type: "string", description: "Filter by name substring (for services, environment, files)" },
+        symphonyOnly: { type: "boolean", description: "For services: only show Symphony-related services (default false)" },
+        sortBy:       { type: "string", enum: ["memory", "cpu", "name"], description: "For processes: sort order (default memory)" },
+        port:         { type: "number", description: "For network: filter by port number" },
+        file:         { type: "string", description: "For raw: which supplementary file to dump (omit to list available)" },
+        limit:        { type: "number", description: "Max entries (default 100)" },
+      },
+      required: ["mode"],
+    },
+  },
+  {
+    name: "sym_event_log",
+    description:
+      "Parse Windows Event Log exports from a Symphony bug report package. " +
+      "LogPackage.cs captures the last 14 days of Application and System event logs as text files. " +
+      "Invaluable for diagnosing service crashes, driver failures, disk errors, and .NET runtime " +
+      "exceptions that occur outside Symphony's own log files. " +
+      "Modes: " +
+      "'entries' (default) — show individual events, filtered and sorted by time. " +
+      "'summary' — breakdown by source and level showing where errors concentrate.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        log:     { type: "string", enum: ["application", "system", "both"], description: "Which event log to inspect" },
+        mode:    { type: "string", enum: ["entries", "summary"], description: "Output format (default 'entries')" },
+        level:   { type: "string", description: "Filter by level: comma-separated, e.g. 'error,critical'" },
+        source:  { type: "string", description: "Filter by event source (substring match)" },
+        eventId: { type: "number", description: "Filter by specific event ID" },
+        search:  { type: "string", description: "Text search in event messages" },
+        limit:   { type: "number", description: "Max entries (default 50)" },
+      },
+      required: ["log"],
     },
   },
 ];
@@ -750,8 +808,10 @@ export function createServer(): Server {
 
         case "sym_db_tables":
           result = await toolDbTables(ctx.bugReport, {
-            mode:      a.mode      as "cameras" | "servers" | "settings" | "users" | "licenses" | "raw" | "summary",
+            mode:      a.mode      as "cameras" | "servers" | "settings" | "users" | "licenses" | "raw" | "summary" | "settings_xml",
             tableName: a.tableName as string | undefined,
+            section:   a.section   as string | undefined,
+            key:       a.key       as string | undefined,
             limit:     a.limit     as number | undefined,
           });
           break;
@@ -814,6 +874,30 @@ export function createServer(): Server {
             permission: a.permission as string | undefined,
             resource:   a.resource   as string | undefined,
             limit:      a.limit      as number | undefined,
+          });
+          break;
+
+        case "sym_system":
+          result = await toolSystemDiag(ctx.bugReport, {
+            mode:         a.mode         as "overview" | "services" | "processes" | "network" | "environment" | "license" | "files" | "db_summary" | "raw",
+            filter:       a.filter       as string | undefined,
+            symphonyOnly: a.symphonyOnly as boolean | undefined,
+            sortBy:       a.sortBy       as "memory" | "cpu" | "name" | undefined,
+            port:         a.port         as number | undefined,
+            file:         a.file         as string | undefined,
+            limit:        a.limit        as number | undefined,
+          });
+          break;
+
+        case "sym_event_log":
+          result = await toolEventLog(ctx.bugReport, {
+            log:     a.log     as "application" | "system" | "both",
+            mode:    a.mode    as "entries" | "summary" | undefined,
+            level:   a.level   as string | undefined,
+            source:  a.source  as string | undefined,
+            eventId: a.eventId as number | undefined,
+            search:  a.search  as string | undefined,
+            limit:   a.limit   as number | undefined,
           });
           break;
 

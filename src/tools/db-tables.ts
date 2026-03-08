@@ -17,6 +17,10 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { BugReport } from "../lib/bug-report.js";
+import {
+  parseTableSettingsXml,
+  readFileOrNull,
+} from "../lib/system-info-parser.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -34,9 +38,13 @@ export interface ParsedTable {
 }
 
 export interface DbTablesArgs {
-  mode: "cameras" | "servers" | "settings" | "users" | "licenses" | "raw" | "summary";
+  mode: "cameras" | "servers" | "settings" | "users" | "licenses" | "raw" | "summary" | "settings_xml";
   /** Specific table name to filter (for raw mode) */
   tableName?: string;
+  /** For settings_xml: filter by section name substring */
+  section?: string;
+  /** For settings_xml: filter by key name substring */
+  key?: string;
   /** Max rows to return */
   limit?: number;
 }
@@ -691,7 +699,7 @@ function formatSummary(tables: ParsedTable[]): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function toolDbTables(
-  bugReport: { folderPath: string } | null,
+  bugReport: BugReport | null,
   args: DbTablesArgs,
 ): Promise<string> {
   if (!bugReport) {
@@ -700,15 +708,34 @@ export async function toolDbTables(
 
   const limit = args.limit ?? 100;
 
-  // Discover and parse all table data
-  const tableFiles = await discoverTableFiles(bugReport.folderPath);
-  if (tableFiles.length === 0) {
+  // ── settings_xml mode — parse TableSettings.xml from extras ──
+  if (args.mode === "settings_xml") {
+    return await formatSettingsXml(bugReport, args.section, args.key, limit);
+  }
+
+  // Discover and parse all table data — use extras.tableFiles when available
+  const servers = bugReport.servers.filter(s => !s.isClient);
+  const allTableFiles: string[] = [];
+
+  for (const srv of servers) {
+    if (srv.extras?.tableFiles?.length) {
+      allTableFiles.push(...srv.extras.tableFiles);
+    }
+  }
+
+  // Also discover from the folder itself (fallback)
+  const discoveredFiles = await discoverTableFiles(bugReport.folderPath);
+  for (const f of discoveredFiles) {
+    if (!allTableFiles.includes(f)) allTableFiles.push(f);
+  }
+
+  if (allTableFiles.length === 0) {
     return "No files containing database table data found in the bug report.";
   }
 
-  const tables = await parseAllTables(tableFiles);
+  const tables = await parseAllTables(allTableFiles);
   if (tables.length === 0) {
-    return `Scanned ${tableFiles.length} file(s) but found no parseable table data.`;
+    return `Scanned ${allTableFiles.length} file(s) but found no parseable table data.`;
   }
 
   switch (args.mode) {
@@ -720,6 +747,67 @@ export async function toolDbTables(
     case "raw":      return formatRaw(tables, args.tableName, limit);
     case "summary":  return formatSummary(tables);
     default:
-      return `Unknown mode: ${args.mode}. Use: cameras, servers, settings, users, licenses, raw, summary.`;
+      return `Unknown mode: ${args.mode}. Use: cameras, servers, settings, users, licenses, raw, summary, settings_xml.`;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings XML renderer
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function formatSettingsXml(
+  bugReport: BugReport,
+  sectionFilter?: string,
+  keyFilter?: string,
+  limit = 100,
+): Promise<string> {
+  const out: string[] = [];
+
+  const servers = bugReport.servers.filter(s => !s.isClient && s.extras?.tableSettingsXml);
+  if (servers.length === 0) {
+    return "No TableSettings.xml found in any server package.";
+  }
+
+  for (const srv of servers) {
+    const text = await readFileOrNull(srv.extras!.tableSettingsXml);
+    if (!text) continue;
+
+    let entries = parseTableSettingsXml(text);
+
+    if (sectionFilter) {
+      const f = sectionFilter.toLowerCase();
+      entries = entries.filter(e => e.section.toLowerCase().includes(f));
+    }
+    if (keyFilter) {
+      const f = keyFilter.toLowerCase();
+      entries = entries.filter(e => e.key.toLowerCase().includes(f));
+    }
+
+    out.push(`\n═══ ${srv.label} — ${entries.length} setting(s) ═══\n`);
+
+    // Group by section
+    const bySection = new Map<string, typeof entries>();
+    for (const e of entries) {
+      const key = e.section || "(no section)";
+      if (!bySection.has(key)) bySection.set(key, []);
+      bySection.get(key)!.push(e);
+    }
+
+    let shown = 0;
+    for (const [section, items] of bySection) {
+      if (shown >= limit) break;
+      out.push(`  [${section}]`);
+      for (const item of items) {
+        if (shown >= limit) break;
+        const valPreview = item.value.length > 80 ? item.value.slice(0, 80) + "…" : item.value;
+        out.push(`    ${item.key} = ${valPreview}`);
+        shown++;
+      }
+    }
+    if (entries.length > limit) {
+      out.push(`\n  ... and ${entries.length - limit} more entries (use section= or key= to filter)`);
+    }
+  }
+
+  return out.join("\n");
 }

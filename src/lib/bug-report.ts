@@ -46,6 +46,43 @@ export interface ServerInfo {
   logDir: string;
   /** Human-readable label, e.g. "CCTVSRV04 (10.60.31.4) [Master]" */
   label: string;
+  /**
+   * Paths to supplementary (non-log) files extracted from the server zip.
+   * All fields are undefined when running in plain log-directory mode.
+   */
+  extras?: ServerExtras;
+}
+
+/**
+ * Paths to the supplementary diagnostic files extracted from a server zip.
+ * Each field is the absolute path to the extracted file, or undefined if
+ * the file was not present in the zip.
+ */
+export interface ServerExtras {
+  // ── System information (all run via Utils.ExecuteCommand with 5-second timeout) ──
+  servicesTxt?:       string;  // sc.exe queryex → stdout
+  tasklistTxt?:       string;  // tasklist.exe /V → stdout
+  ipconfigTxt?:       string;  // ipconfig.exe /all → stdout
+  netstatTxt?:        string;  // netstat.exe -nao → file, then netstat.exe -r → append
+  systeminfoTxt?:     string;  // systeminfo.exe → stdout (often truncated — 5s timeout too short)
+  environmentTxt?:    string;  // cmd.exe /c set → stdout
+  printshmemTxt?:     string;  // printshmem.exe x2 → stdout (custom tool from BinaryDir)
+
+  // ── Event logs (custom tool: _Tools/EventViewerConsole.exe "<Log> <Days>") ──
+  eventLogAppTxt?:    string;  // EventViewerConsole.exe "Application 14" — last 14 days
+  eventLogSysTxt?:    string;  // EventViewerConsole.exe "System 14" — last 14 days
+
+  // ── License / install ──
+  licenseReg?:        string;  // DEAD CODE in LogPackage.cs — path is defined but file is never created
+  licenseTxt?:        string;  // LicensingStatus.WriteReport() — multi-section report
+  dirTxt?:            string;  // GenerateFileList() — custom format: size yyyy/MM/dd HH:mm:ss version path
+
+  // ── Database tables (from LogPackageDAL, uses DataTable.WriteTable() format) ──
+  dbTxt?:             string;  // DataTable with columns "Tbl", "Count" — all user tables
+  tableSettingsXml?:  string;  // XmlSerializer(CSetting[]) — full Settings table from DB
+
+  // ── All Table*.txt / View*.txt files ──
+  tableFiles?:        string[];  // paths to every Table*.txt / View*.txt
 }
 
 export interface BugReport {
@@ -126,20 +163,51 @@ function parseServerInfoTxt(text: string): Map<string, { name: string; isMaster:
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Extract ai_logs/*.txt files (standard log format only) from a server zip
- * into `dest`. Skips if `dest` already exists (cached extraction).
+ * Supplementary (non-log) files we want to extract from server zips.
+ * Maps zip-internal filename (case-insensitive) to the ServerExtras key.
  */
-async function extractServerZip(zipPath: string, extractBase: string): Promise<string> {
+const EXTRA_FILES: Record<string, keyof ServerExtras> = {
+  "services.txt":             "servicesTxt",
+  "tasklist.txt":             "tasklistTxt",
+  "ipconfig.txt":             "ipconfigTxt",
+  "netstat.txt":              "netstatTxt",
+  "systeminfo.txt":           "systeminfoTxt",
+  "environment.txt":          "environmentTxt",
+  "printshmem.txt":           "printshmemTxt",
+  "eventlogapplication.txt":  "eventLogAppTxt",
+  "eventlogsystem.txt":       "eventLogSysTxt",
+  "license.reg":              "licenseReg",
+  "license.txt":              "licenseTxt",
+  "dir.txt":                  "dirTxt",
+  "db.txt":                   "dbTxt",
+  "tablesettings.xml":        "tableSettingsXml",
+};
+
+/**
+ * Extract log files AND supplementary diagnostic files from a server zip
+ * into `dest`. Skips if `dest` already exists (cached extraction).
+ * Returns { logDir, extras }.
+ */
+async function extractServerZip(
+  zipPath: string,
+  extractBase: string,
+): Promise<{ logDir: string; extras: ServerExtras }> {
   const label = path.basename(zipPath, ".zip");
   const dest = path.join(extractBase, label);
+  const extrasDir = path.join(dest, "_extras");
 
-  // Already extracted — reuse
+  // Already extracted — rebuild extras from what's on disk
   try {
     await fs.access(dest);
-    return dest;
+    const extras = await rebuildExtrasFromDisk(extrasDir);
+    return { logDir: dest, extras };
   } catch { /* not yet extracted */ }
 
   await fs.mkdir(dest, { recursive: true });
+  await fs.mkdir(extrasDir, { recursive: true });
+
+  const extras: ServerExtras = {};
+  const tableFiles: string[] = [];
 
   const zip = new AdmZip(zipPath);
   for (const entry of zip.getEntries()) {
@@ -147,20 +215,64 @@ async function extractServerZip(zipPath: string, extractBase: string): Promise<s
 
     // Normalise path separators (zip may use backslash on Windows)
     const entryName = entry.entryName.replace(/\\/g, "/");
-
-    // Only extract files from the ai_logs/ or Log/ subtree (both layouts are used)
-    const knownPrefix = entryName.startsWith("ai_logs/") || entryName.startsWith("Log/");
-    if (!knownPrefix) continue;
-
     const filename = path.basename(entryName);
 
-    // Only extract files the log-reader already knows how to parse
-    if (!parseLogFilename(filename)) continue;
+    // ── Log files: from ai_logs/ or Log/ subtrees ──
+    const isLogSubtree = entryName.startsWith("ai_logs/") || entryName.startsWith("Log/");
+    if (isLogSubtree && parseLogFilename(filename)) {
+      await fs.writeFile(path.join(dest, filename), entry.getData());
+      continue;
+    }
 
-    await fs.writeFile(path.join(dest, filename), entry.getData());
+    // ── Supplementary files: extract to _extras/ ──
+    const lowerName = filename.toLowerCase();
+
+    // Named extras (services.txt, netstat.txt, etc.)
+    const extraKey = EXTRA_FILES[lowerName];
+    if (extraKey) {
+      const outPath = path.join(extrasDir, filename);
+      await fs.writeFile(outPath, entry.getData());
+      (extras as Record<string, string>)[extraKey] = outPath;
+      continue;
+    }
+
+    // Table*.txt / View*.txt files (there are ~20+ of these)
+    if (/^(Table|View)[A-Za-z]+\.(txt|xml)$/i.test(filename)) {
+      const outPath = path.join(extrasDir, filename);
+      await fs.writeFile(outPath, entry.getData());
+      tableFiles.push(outPath);
+      continue;
+    }
+
+    // Log files at root level (some zips don't use ai_logs/ prefix)
+    if (parseLogFilename(filename)) {
+      await fs.writeFile(path.join(dest, filename), entry.getData());
+    }
   }
 
-  return dest;
+  if (tableFiles.length > 0) {
+    extras.tableFiles = tableFiles.sort();
+  }
+
+  // Persist extras manifest so we can rebuild on cache hit
+  await fs.writeFile(
+    path.join(extrasDir, "_manifest.json"),
+    JSON.stringify(extras, null, 2),
+  );
+
+  return { logDir: dest, extras };
+}
+
+/**
+ * Rebuild ServerExtras from a previously-extracted _extras directory.
+ */
+async function rebuildExtrasFromDisk(extrasDir: string): Promise<ServerExtras> {
+  try {
+    const manifest = await fs.readFile(path.join(extrasDir, "_manifest.json"), "utf8");
+    return JSON.parse(manifest) as ServerExtras;
+  } catch {
+    return {};
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -214,7 +326,7 @@ export async function extractBugReport(folderPath: string): Promise<BugReport> {
 
     const ip = m[1]; // e.g. "10.60.31.8"
     const zipPath = path.join(folderPath, file);
-    const logDir = await extractServerZip(zipPath, extractBase);
+    const { logDir, extras } = await extractServerZip(zipPath, extractBase);
 
     const info = serverInfoMap.get(ip);
     const serverName = info?.name ?? ip;
@@ -227,6 +339,7 @@ export async function extractBugReport(folderPath: string): Promise<BugReport> {
       isClient: false,
       logDir,
       label: `${serverName} (${ip})${isMaster ? " [Master]" : ""}`,
+      extras,
     });
   }
 

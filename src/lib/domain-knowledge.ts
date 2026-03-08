@@ -203,20 +203,72 @@ sccp monitors all process PIDs and resource usage.
 A bug report package contains:
 - \`bugreport.txt\` — incident metadata (version, farm name, problem description, time of error)
 - \`serverinfo.txt\` — per-server hardware and topology info
-- \`SymphonyLog-{IP}-{YYMMDD}-{HHMMSS}.zip\` — one per server, contains \`ai_logs/*.txt\`
+- \`SymphonyLog-{IP}-{YYMMDD}-{HHMMSS}.zip\` — one per server, contains:
+  - \`ai_logs/*.txt\` — Symphony log files (is, sc, cs*, pd, sccp, hm, etc.)
+  - \`services.txt\` — \`sc.exe queryex\` output (all Windows services with state and PID; 5s timeout)
+  - \`tasklist.txt\` — \`tasklist.exe /V\` output (all running processes with memory/CPU; 5s timeout)
+  - \`ipconfig.txt\` — \`ipconfig.exe /all\` (network adapters, IPs, DNS, DHCP; 5s timeout)
+  - \`netstat.txt\` — \`netstat.exe -nao\` then \`netstat.exe -r\` appended (connections + routing; 5s timeout each)
+  - \`systeminfo.txt\` — \`systeminfo.exe\` (OS, hardware, hotfixes; 5s timeout — often truncated/empty!)
+  - \`environment.txt\` — \`cmd.exe /c set\` (environment variables; 5s timeout)
+  - \`printshmem.txt\` — \`printshmem.exe x2\` from BinaryDir (license dongle shared memory)
+  - \`EventLogApplication.txt\` — custom \`EventViewerConsole.exe\` (NOT standard Windows export; format: \`yyyy/MM/dd HH:mm:ss ID: 0xHEX EventType: N Source: name\`)
+  - \`EventLogSystem.txt\` — same EventViewerConsole.exe format, System log (14 days)
+  - \`license.txt\` — \`LicensingStatus.WriteReport()\` via LicensingStatusReportWriter (multi-section structured report)
+  - \`license.reg\` — DEAD CODE: path defined in LogPackage.cs but file is never created
+  - \`dir.txt\` — custom C# \`GenerateFileList()\` with human-readable sizes (e.g. \`3 MB\`, \`42 KB\`, \`8,192  B\`)
+  - \`db.txt\` — \`LogPackageDAL\` DataTable with "Tbl"/"Count" columns (DataTable.WriteTable format)
+  - \`TableSettings.xml\` — \`XmlSerializer(CSetting[])\` export: \`<ArrayOfCSetting><CSetting Key= Value=...>\`
+  - \`Table*.txt\` / \`View*.txt\` — SQL SELECT dumps via DataTable.WriteTable() (PadRight-aligned columns, dash separators)
 - \`SymphonyLog-client-{YYMMDD}-{HHMMSS}.zip\` — client logs
 
-The MCP server auto-extracts these and presents them as a multi-server log directory.
+The MCP server auto-extracts all of these and makes them available through the analysis tools.
+
+---
+
+## System-Level Diagnostic Playbooks
+
+### "What OS and hardware is this server running?"
+1. Use \`sym_system\` with mode 'overview' — shows OS, CPU, RAM, boot time, hotfixes
+2. For detailed hardware: \`sym_info\` with action 'hardware' (from serverinfo.txt)
+3. For installed file versions: \`sym_system\` with mode 'files'
+
+### "Is a Symphony service stopped or crash-looping?"
+1. \`sym_system\` mode 'services' with symphonyOnly=true — shows Windows service state
+2. Cross-reference with \`sym_lifecycle\` on is/sc logs for application-level events
+3. Check \`sym_event_log\` for .NET runtime errors or service control manager events
+
+### "What ports is Symphony listening on?"
+1. \`sym_system\` mode 'network' — shows all adapters and listening ports
+2. Filter by specific port: \`sym_system\` mode 'network' port=50000
+3. Key Symphony ports: 50000 (IS), 50001 (IS WS), 50002 (Intel), 50014 (HTTPS), 5432 (PostgreSQL), 8433 (MobileBridge)
+
+### "Are there Windows Event Log errors around the incident?"
+1. \`sym_event_log\` log='both' level='error,critical' — show all errors
+2. \`sym_event_log\` log='application' source='Symphony' — filter by source
+3. \`sym_event_log\` log='both' mode='summary' — see error concentration by source
+
+### "What database settings are configured?"
+1. \`sym_db_tables\` mode 'settings_xml' — parse TableSettings.xml with full section/key structure
+2. Filter by section: \`sym_db_tables\` mode 'settings_xml' section='Video'
+3. \`sym_db_tables\` mode 'settings' — search across all Table*.txt files for config data
+
+### "Check license and installed version"
+1. \`sym_system\` mode 'license' — license info + shared memory
+2. \`sym_system\` mode 'files' filter='.exe' — see installed executables with versions
 
 ---
 
 ## Tips for Effective Analysis
 
 1. **Start with \`sym_info\` (bug_report)** to get incident context — time of error, product version, server count
-2. **Use \`sym_health\`** for a quick overall assessment before diving into specific logs
-3. **Narrow by time** — use startTime/endTime around the "Time of Error" from the bug report
-4. **Use prefixes** — pass 'is' or 'is-260227' instead of full filenames to select log files
-5. **Cross-reference** — an error in IS may have a root cause in sc, cs, or sccp logs
-6. **Check sccp** for process restarts — they often explain service-level errors
-7. **Use \`sym_compare\`** when you have two test runs or before/after scenarios
+2. **Use \`sym_system\` (overview)** for host-level context — OS, RAM, services status, ports, license, database size
+3. **Use \`sym_health\`** for a quick overall assessment before diving into specific logs
+4. **Check \`sym_event_log\`** for Windows-level errors (service crashes, .NET runtime failures, disk errors)
+5. **Narrow by time** — use startTime/endTime around the "Time of Error" from the bug report
+6. **Use prefixes** — pass 'is' or 'is-260227' instead of full filenames to select log files
+7. **Cross-reference** — an error in IS may have a root cause in sc, cs, or sccp logs
+8. **Check sccp** for process restarts — they often explain service-level errors
+9. **Use \`sym_compare\`** when you have two test runs or before/after scenarios
+10. **Use \`sym_db_tables\` (settings_xml)** to check system configuration — helps explain behavioral issues
 `;

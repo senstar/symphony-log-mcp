@@ -15,8 +15,8 @@
  */
 
 import * as path from "path";
-import { resolveFileRefs, readRawLines } from "../lib/log-reader.js";
-import { isInTimeWindow } from "../lib/log-reader.js";
+import { resolveFileRefs, readRawLines, isInTimeWindow } from "../lib/log-reader.js";
+import { timestampToMs } from "../lib/log-parser.js";
 import { findSlowRpcRequests, formatSlowRequests, type SlowRequest } from "./slow-requests.js";
 
 // ── Regex patterns ─────────────────────────────────────────────────────────────
@@ -44,17 +44,6 @@ interface HttpRequest {
   durationMs: number | null;
   slowWarnings: number[]; // "processing: N ms" intermediate warnings
   sourceFile: string;
-}
-
-function tsToMs(ts: string): number {
-  const [hh, mm, ss] = ts.split(":");
-  const [sec, frac] = ss.split(".");
-  return (
-    parseInt(hh) * 3_600_000 +
-    parseInt(mm) * 60_000 +
-    parseInt(sec) * 1_000 +
-    parseInt((frac ?? "0").padEnd(3, "0").slice(0, 3))
-  );
 }
 
 /** Returns the status class string ("2xx", "3xx", "4xx", "5xx", "???") for a numeric status code. */
@@ -364,7 +353,7 @@ export async function toolSearchHttpRequests(
     type RateBucket = { count: number; errors: number; totalMs: number; maxMs: number };
     const buckets = new Map<string, RateBucket>();
     for (const r of filtered) {
-      const ms = tsToMs(r.startedAt);
+      const ms = timestampToMs(r.startedAt);
       const bucketStart = Math.floor(ms / bucketMs) * bucketMs;
       const h = Math.floor(bucketStart / 3_600_000);
       const m = Math.floor((bucketStart % 3_600_000) / 60_000);

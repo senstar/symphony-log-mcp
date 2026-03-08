@@ -157,7 +157,7 @@ sccp monitors all process PIDs and resource usage.
 5. Check \`pd\` logs for native crash dumps (C++ exceptions, access violations)
 
 ### "Slow / unresponsive"
-1. Use \`sym_slow_requests\` on \`is\` to find requests > threshold
+1. Use \`sym_http\` mode 'slow' on \`is\` to find requests > threshold
 2. Use \`sym_http\` to check request rates and error codes
 3. Check for UI thread freeze with \`sym_ui_thread\` on \`ae\` logs
 4. Check \`sccp\` for high memory or CPU usage patterns
@@ -190,7 +190,7 @@ sccp monitors all process PIDs and resource usage.
 | \`Database is down. Failing connection.\` | SQL Server connection lost. Check DB server health and network. | Service.cpp:216 — CDbWrapper::Connect |
 | \`WallGetPanels\` errors | Video wall layout request failed. IS overload or large wall config. | Signals.asmx.cs:9394 |
 | \`System.OutOfMemoryException\` | Process hit memory limit. Check sccp for memory trends — usually a leak. | Generic .NET |
-| \`System.TimeoutException\` in RequestProcessor | Individual RPC call timed out. Use \`sym_slow_requests\` to find other slow calls. | Generic .NET |
+| \`System.TimeoutException\` in RequestProcessor | Individual RPC call timed out. Use \`sym_http\` mode 'slow' to find other slow calls. | Generic .NET |
 | \`System.Net.Sockets.SocketException\` | Network connectivity issue. Check source/dest IPs in the error. | Generic .NET |
 | \`LprVersion\` errors | LPR version check failed — LPR.asmx.cs web service method. Check LPR integration config. | LPR.asmx.cs:106 |
 | \`AbortAuthenticate\` | Client authentication aborted — thrown in MessageDispatcher.cs:384,512. Usually SSO/AD timeout. Caught and filtered, not always logged. | MessageDispatcher.cs |

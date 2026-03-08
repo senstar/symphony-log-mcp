@@ -39,14 +39,12 @@ const STOP_PATTERNS = [
 
 /** Keywords that indicate a forced restart or failover condition.
  *  Verified against source code:
+ *  - "database is down" — actual log message (Service.cpp:216)
+ *  - "RestartMyself" — Tracker self-restart method (TrackerAx.cpp:921)
+ *  - "failover" — SAN/server failover (ResourceLocations.cpp, ControlRequest.cs)
  *  - "buddy" — farm failover (CFarmHealth.cs sends ALIVE to buddies)
  *  - "ALIVE" — farm heartbeat (30-second threshold per Signals.asmx.cs:8669)
- *  - "failover" — SAN/server failover (ResourceLocations.cpp, ControlRequest.cs)
  *  - "WallGetPanels" — video wall layout request (Signals.asmx.cs:9359)
- *  - "Database is down" — actual log message (Service.cpp:216)
- *  - "RestartMyself" — Tracker self-restart method (TrackerAx.cpp:921)
- *  NOTE: "too many timeouts on web broker threads", "database went away",
- *  "database came back", and "self-restart" do NOT exist in source code.
  */
 const RESTART_REASON_PATTERNS = [
   /database.*is.*down/i,
@@ -63,10 +61,7 @@ const RESTART_REASON_PATTERNS = [
   /buddy.*failed/i,
   /buddy.*down/i,
   /ALIVE.*failed/i,
-  /not alive/i,
   /WallGetPanels/i,
-  /timeout.*web.*broker/i,
-  /too many timeouts/i,
 ];
 
 interface LifecycleEvent {

@@ -30,6 +30,7 @@ export async function computeHealthSummary(
   errorCount: number;
   uniquePatterns: number;
   processCount: number;
+  topErrors: { count: number; message: string }[];
 }> {
   const [lifetimeResult, errorResult] = await Promise.all([
     computeProcessLifetimes(logDir, {
@@ -109,7 +110,15 @@ export async function computeHealthSummary(
     : 0;
   const uniquePatterns = errorResult ? errorResult.groups.size : 0;
 
-  return { processRows, totalRestarts, crashLoopCount, errorCount, uniquePatterns, processCount };
+  // Pre-compute top error messages so toolSummarizeHealth doesn't need a second call
+  const topErrors: { count: number; message: string }[] = errorResult
+    ? [...errorResult.groups.values()]
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10)
+        .map(g => ({ count: g.count, message: g.first.line.message }))
+    : [];
+
+  return { processRows, totalRestarts, crashLoopCount, errorCount, uniquePatterns, processCount, topErrors };
 }
 
 /** Format a health summary for display. */
@@ -117,7 +126,7 @@ export async function toolSummarizeHealth(
   logDir: string | string[],
   args: SummarizeHealthArgs
 ): Promise<string> {
-  const { processRows, totalRestarts, crashLoopCount, errorCount, uniquePatterns, processCount } =
+  const { processRows, totalRestarts, crashLoopCount, errorCount, uniquePatterns, processCount, topErrors } =
     await computeHealthSummary(logDir, args);
 
   const out: string[] = [
@@ -158,21 +167,8 @@ export async function toolSummarizeHealth(
     out.push(`ERRORS  (${errorCount} total occurrences, ${uniquePatterns} unique patterns)`);
     out.push("─".repeat(85));
 
-    // Re-fetch the error groups to show top messages (we don't store them in processRows)
-    if (args.errorFiles?.length) {
-      const errorResult = await computeErrorGroups(logDir, {
-        files: args.errorFiles,
-        deduplicate: true,
-        startTime: args.startTime,
-        endTime: args.endTime,
-        limit: 10,
-      });
-      const topErrors = [...errorResult.groups.values()]
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
-      for (const g of topErrors) {
-        out.push(`  ${String(g.count).padStart(5)}×  ${g.first.line.message.slice(0, 75)}`);
-      }
+    for (const e of topErrors) {
+      out.push(`  ${String(e.count).padStart(5)}×  ${e.message.slice(0, 75)}`);
     }
     out.push("");
   }

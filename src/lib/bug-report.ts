@@ -73,7 +73,6 @@ export interface ServerExtras {
   eventLogSysTxt?:    string;  // EventViewerConsole.exe "System 14" — last 14 days
 
   // ── License / install ──
-  licenseReg?:        string;  // DEAD CODE in LogPackage.cs — path is defined but file is never created
   licenseTxt?:        string;  // LicensingStatus.WriteReport() — multi-section report
   dirTxt?:            string;  // GenerateFileList() — custom format: size yyyy/MM/dd HH:mm:ss version path
 
@@ -176,7 +175,6 @@ const EXTRA_FILES: Record<string, keyof ServerExtras> = {
   "printshmem.txt":           "printshmemTxt",
   "eventlogapplication.txt":  "eventLogAppTxt",
   "eventlogsystem.txt":       "eventLogSysTxt",
-  "license.reg":              "licenseReg",
   "license.txt":              "licenseTxt",
   "dir.txt":                  "dirTxt",
   "db.txt":                   "dbTxt",

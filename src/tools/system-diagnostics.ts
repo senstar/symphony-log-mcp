@@ -25,6 +25,7 @@ import {
   type WindowsService,
   type ProcessInfo,
 } from "../lib/system-info-parser.js";
+import { isSymphonyService } from "../lib/symphony-patterns.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -60,17 +61,7 @@ export interface SystemDiagArgs {
   limit?: number;
 }
 
-/** Known Symphony service name patterns */
-const SYMPHONY_SVC_PATTERNS = [
-  /senstar/i, /symphony/i, /aira/i, /tracker/i, /infoservice/i,
-  /mobilebridge/i, /pdebug/i, /seer/i, /cleaner/i, /scheduler/i,
-  /mediagateway/i, /videocd/i, /dataacc/i, /^ai/i, /rtsp/i,
-];
-
-function isSymphonyService(name: string, display: string): boolean {
-  const combined = `${name} ${display}`;
-  return SYMPHONY_SVC_PATTERNS.some(p => p.test(combined));
-}
+// Symphony service patterns imported from ../lib/symphony-patterns.ts
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main entry point
@@ -230,7 +221,6 @@ async function renderOverview(servers: ServerCtx[]): Promise<string> {
     if (srv.extras.eventLogAppTxt) available.push("eventlog-app");
     if (srv.extras.eventLogSysTxt) available.push("eventlog-sys");
     if (srv.extras.licenseTxt) available.push("license");
-    if (srv.extras.licenseReg) available.push("license.reg");
     if (srv.extras.dirTxt) available.push("dir");
     if (srv.extras.dbTxt) available.push("db");
     if (srv.extras.tableSettingsXml) available.push("settings.xml");
@@ -488,14 +478,14 @@ async function renderRaw(
     const fileKeys: (keyof ServerExtras)[] = [
       "servicesTxt", "tasklistTxt", "ipconfigTxt", "netstatTxt",
       "systeminfoTxt", "environmentTxt", "printshmemTxt",
-      "eventLogAppTxt", "eventLogSysTxt", "licenseTxt", "licenseReg",
+      "eventLogAppTxt", "eventLogSysTxt", "licenseTxt",
       "dirTxt", "dbTxt", "tableSettingsXml",
     ];
     const nameMap: Record<string, string> = {
       servicesTxt: "services", tasklistTxt: "tasklist", ipconfigTxt: "ipconfig",
       netstatTxt: "netstat", systeminfoTxt: "systeminfo", environmentTxt: "environment",
       printshmemTxt: "printshmem", eventLogAppTxt: "eventlog-app",
-      eventLogSysTxt: "eventlog-sys", licenseTxt: "license", licenseReg: "license-reg",
+      eventLogSysTxt: "eventlog-sys", licenseTxt: "license",
       dirTxt: "dir", dbTxt: "db", tableSettingsXml: "settings-xml",
     };
     for (const srv of servers) {
@@ -525,7 +515,7 @@ async function renderRaw(
       printshmem: "printshmemTxt", "eventlog-app": "eventLogAppTxt",
       "eventlog-sys": "eventLogSysTxt", "eventlogapplication": "eventLogAppTxt",
       "eventlogsystem": "eventLogSysTxt", license: "licenseTxt",
-      "license-reg": "licenseReg", dir: "dirTxt", db: "dbTxt",
+      dir: "dirTxt", db: "dbTxt",
       "settings-xml": "tableSettingsXml", "tablesettings": "tableSettingsXml",
     };
 

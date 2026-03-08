@@ -23,6 +23,7 @@
 
 import * as path from "path";
 import { resolveFileRefs, listLogFiles, isInTimeWindow, readRawLinesWithTimeFilter } from "../lib/log-reader.js";
+import { timestampToMs } from "../lib/log-parser.js";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Regex patterns
@@ -90,23 +91,6 @@ interface RequestTrace {
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
-function parseTs(ts: string): number {
-  const [h, m, s] = ts.split(":").map(Number);
-  const [sec, ms] = (s.toString()).split(".");
-  return h * 3_600_000 + m * 60_000 + Number(sec) * 1_000 + Number((s % 1).toFixed(3).slice(2));
-}
-
-function tsToMs(ts: string): number {
-  const [hh, mm, ss] = ts.split(":");
-  const [sec, frac] = ss.split(".");
-  return (
-    parseInt(hh) * 3_600_000 +
-    parseInt(mm) * 60_000 +
-    parseInt(sec) * 1_000 +
-    parseInt((frac ?? "0").padEnd(3, "0").slice(0, 3))
-  );
-}
-
 function durationStrToMs(dur: string): number {
   // "00:00:00.0322825" → ms
   const parts = dur.split(":");
@@ -167,7 +151,7 @@ async function parseMoHops(
       const hop = pending.get(guid);
       if (hop) {
         hop.recvAt = ts;
-        hop.roundTripMs = tsToMs(ts) - tsToMs(hop.sentAt);
+        hop.roundTripMs = timestampToMs(ts) - timestampToMs(hop.sentAt);
         completed.push(hop);
         pending.delete(guid);
       }
@@ -248,7 +232,7 @@ async function parseIsHops(
       if (hop) {
         hop.completedAt = ts;
         hop.durationMs = durationStrToMs(durStr);
-        hop.processingMs = tsToMs(ts) - tsToMs(hop.invokedAt);
+        hop.processingMs = timestampToMs(ts) - timestampToMs(hop.invokedAt);
         completed.push(hop);
         pending.delete(seq);
       }
@@ -330,7 +314,7 @@ export async function toolTraceMbRequest(
   // Widen the IS time window by ±30 s around the earliest/latest Mo hop to
   // avoid matching reused sequence numbers from different client connections.
   const seqSet = new Set(moHops.map(h => h.seq));
-  const moTimes = moHops.map(h => tsToMs(h.sentAt));
+  const moTimes = moHops.map(h => timestampToMs(h.sentAt));
   const minMoMs = Math.min(...moTimes);
   const maxMoMs = Math.max(...moTimes);
   const PAD_MS = 30_000;
@@ -413,7 +397,7 @@ export async function toolTraceMbRequest(
     // IS invoke + handler
     const isHop = trace.isHops[0];
     if (isHop) {
-      const networkMs = tsToMs(isHop.invokedAt) - tsToMs(firstMo.sentAt);
+      const networkMs = timestampToMs(isHop.invokedAt) - timestampToMs(firstMo.sentAt);
       out.push(`  [${isHop.invokedAt}] IS recv  Request(${isHop.seq})[${isHop.requestName}] from ${isHop.sourcePort}  net_latency=+${networkMs}ms`);
       if (isHop.sessionId && isHop.sessionId !== "00000000-0000-0000-0000-000000000000") {
         out.push(`           session=${isHop.sessionId}`);

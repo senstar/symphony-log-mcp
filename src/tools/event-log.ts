@@ -171,7 +171,7 @@ function renderSummary(label: string, entries: EventLogEntry[]): string {
     .map(([src, levels]) => ({
       source: src,
       total: [...levels.values()].reduce((a, b) => a + b, 0),
-      errors: levels.get("Error") ?? 0 + (levels.get("Critical") ?? 0),
+      errors: (levels.get("Error") ?? 0) + (levels.get("Critical") ?? 0),
       levels,
     }))
     .sort((a, b) => b.errors - a.errors || b.total - a.total)

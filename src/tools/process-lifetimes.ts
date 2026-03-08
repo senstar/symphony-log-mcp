@@ -16,6 +16,7 @@
  */
 
 import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { isSymphonyProcess } from "../lib/symphony-patterns.js";
 import * as path from "path";
 
 interface ProcessSnapshot {
@@ -55,33 +56,7 @@ function parseSccpLine(message: string): { name: string; pid: number; mem: numbe
   };
 }
 
-// Symphony-specific processes we care about tracking restarts for.
-// Names verified from actual exe outputs and sccp log format:
-//   Tracker(NNNN) — special format from CpuCounter.cpp
-//   infoservice.exe, scheduler.exe, ae.exe, seermanager.exe,
-//   fusionengineservice.exe, hardwarecontainerservice*.exe,
-//   mobilebridge.exe, onvifserver.exe, killall.exe, nssm.exe,
-//   surrogateexe.exe, netsendhistmfc.exe
-const SYMPHONY_PROCESS_PATTERNS = [
-  /^Tracker\s*\(/i,
-  /^infoservice/i,
-  /^ae\.exe/i,
-  /^seermanager/i,
-  /^scheduler/i,
-  /^fusionengineservice/i,
-  /^hardwarecontainer/i,
-  /^mobilebridge/i,
-  /^onvifserver/i,
-  /^killall/i,
-  /^nssm/i,
-  /^surrogateexe/i,
-  /^netsendhistmfc/i,
-  /^seer\.web/i,
-];
-
-function isSymphonyProcess(name: string): boolean {
-  return SYMPHONY_PROCESS_PATTERNS.some((p) => p.test(name));
-}
+// Symphony process detection imported from ../lib/symphony-patterns.ts
 
 /**
  * Normalise a process name for grouping.

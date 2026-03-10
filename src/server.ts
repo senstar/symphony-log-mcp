@@ -131,9 +131,9 @@ export function createServer(): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const a = (args ?? {}) as Record<string, unknown>;
-    const ctx = await getLogContext();
 
     try {
+      const ctx = await getLogContext();
       const result = await dispatchToolCall(name, a, ctx, LOG_DIR_RAW);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {

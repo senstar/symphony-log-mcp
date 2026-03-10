@@ -253,6 +253,9 @@ export async function streamLogEntries(
 
   return new Promise((resolve, reject) => {
     const stream = createReadStream(fullPath, { encoding: "utf8" });
+    stream.on("error", (err) => {
+      reject(err);
+    });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     let currentEntry: LogEntry | null = null;

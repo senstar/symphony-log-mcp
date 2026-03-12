@@ -153,5 +153,5 @@ export async function main() {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`symphony-log-mcp running. Log directory: ${LOG_DIR_RAW}`);
+  console.error(`symphony-log-mcp v${version} running. Log directory: ${LOG_DIR_RAW}`);
 }

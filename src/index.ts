@@ -1,38 +1,56 @@
 #!/usr/bin/env node
 import { main } from "./server.js";
 
+function ts(): string {
+  return new Date().toISOString();
+}
+
 process.on("uncaughtException", (err) => {
-  console.error("Uncaught exception:", err);
+  console.error(`[${ts()}] uncaughtException:`, err);
 });
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled rejection:", reason);
+  console.error(`[${ts()}] unhandledRejection:`, reason);
 });
 
-// Keep the process alive when stdin closes (VS Code may close the pipe
-// during idle periods).  Without this, Node drains the event loop and
-// exits — sometimes with code 1 due to a late stdout EPIPE.
+// VS Code's MCP host closes the stdin pipe during idle periods, window
+// reloads, or when it decides to recycle the server.  Without a ref'd
+// handle keeping the event loop alive, Node drains and exits — which
+// VS Code interprets as a crash and shows "server died".
+//
+// Strategy: keep a ref'd interval alive so the process survives stdin
+// close.  The stdout EPIPE handler below will still cleanly exit if
+// VS Code truly disconnects the output pipe.
 process.stdin.on("end", () => {
-  console.error("stdin closed, exiting gracefully");
-  process.exit(0);
+  console.error(`[${ts()}] stdin closed — keeping process alive`);
+  setInterval(() => {}, 60_000);  // ref'd: prevents event-loop drain
 });
 
 // Prevent EPIPE crashes when writing to stdout after the parent closes
-// the pipe.
+// the pipe.  This is the real "time to die" signal — VS Code has
+// disconnected the output pipe, so there's nothing we can send to.
 process.stdout.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") {
+    console.error(`[${ts()}] stdout ${err.code} — exiting`);
     process.exit(0);
   }
-  console.error("stdout error:", err);
+  console.error(`[${ts()}] stdout error:`, err);
 });
 
-// Diagnostic: log the exit code so it appears in VS Code's MCP output.
+// Log the exit code so it appears in VS Code's MCP output channel.
 process.on("exit", (code) => {
   if (code !== 0) {
-    console.error(`Process exiting with code ${code}`);
+    console.error(`[${ts()}] process exiting with code ${code}`);
   }
 });
 
+// Heartbeat: log RSS every 60s to detect memory leaks and to show
+// the last-alive timestamp in the MCP output channel.
+setInterval(() => {
+  const rss = Math.round(process.memoryUsage().rss / 1024 / 1024);
+  console.error(`[${ts()}] heartbeat rss=${rss}MB`);
+}, 60_000).unref();
+
 main().catch((err) => {
-  console.error("Fatal error:", err);
+  console.error(`[${ts()}] Fatal error:`, err);
   process.exit(1);
 });

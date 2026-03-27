@@ -54,16 +54,15 @@ Add this server to your Claude Desktop config file:
   "mcpServers": {
     "symphony-logs": {
       "command": "node",
-      "args": ["/path/to/symphony-log-mcp/dist/index.js", "C:\\Log"],
-      "env": {
-        "LOG_DIR": "C:\\Log"
-      }
+      "args": ["/path/to/symphony-log-mcp/dist/index.js"]
     }
   }
 }
 ```
 
-The second argument or `LOG_DIR` environment variable sets the default log directory. You can override this per-tool by using absolute paths in tool parameters.
+Optionally pass a log directory as the first CLI argument or via the `LOG_DIR` environment variable to pre-configure the session. Otherwise, call `sym_open` at the start of each session to point at the log directory you want to analyze.
+
+> **Safety note:** There is no default log directory. Previous versions defaulted to `C:\Log`, which could silently read from a live production server junction. You must now explicitly set the directory.
 
 ### VS Code with GitHub Copilot
 
@@ -74,14 +73,13 @@ Add to `.vscode/mcp.json` in your workspace:
   "mcpServers": {
     "symphony-logs": {
       "command": "node",
-      "args": ["${workspaceFolder}/tools/symphony-log-mcp/dist/index.js"],
-      "env": {
-        "LOG_DIR": "${workspaceFolder}/Compare"
-      }
+      "args": ["${workspaceFolder}/tools/symphony-log-mcp/dist/index.js"]
     }
   }
 }
 ```
+
+Then call `sym_open` with a directory path to start analyzing logs. Every tool also accepts an optional `logDir` parameter for one-shot analysis of a different directory without changing the session.
 
 ## Usage
 
@@ -98,18 +96,19 @@ Once configured, you can ask your AI assistant natural language questions like:
 
 The AI assistant will automatically invoke the appropriate MCP tools and interpret the results for you.
 
-## Available Tools (19)
+## Available Tools (20)
 
 All tools use the `sym_` prefix for easy discovery.
 
 | Tool | Description |
 |------|-------------|
-| `sym_triage` | **Start here.** Automated first-pass diagnosis — runs health, error, lifecycle, and event log checks in parallel, returns prioritized findings |
+| `sym_open` | **Call first.** Set the log directory for this session. Accepts an absolute path to a directory or bug report folder. Call again to switch directories. |
+| `sym_triage` | Automated first-pass diagnosis — runs health, error, lifecycle, and event log checks in parallel, returns prioritized findings |
 | `sym_info` | Bug report metadata, list log files, decode prefixes, hardware config (action: `bug_report` \| `list_files` \| `decode_prefix` \| `hardware`) |
-| `sym_search` | Search for errors or text/regex patterns (mode: `errors` \| `pattern`) |
+| `sym_search` | Search for errors, text/regex patterns, count occurrences, or prove absence (mode: `errors` \| `pattern` \| `count` \| `assert_absent`) |
 | `sym_crashes` | Extract .NET exceptions or native C++ crash dumps (mode: `managed` \| `native`) |
 | `sym_lifecycle` | Service start/stop/restart events, process-level PID tracking, or log gap detection (mode: `services` \| `processes` \| `gaps`) |
-| `sym_timeline` | Merge logs chronologically or trace RPC calls across Mo→IS (mode: `correlate` \| `trace_rpc`) |
+| `sym_timeline` | Merge logs chronologically, trace RPC calls, or cluster pattern matches into temporal waves (mode: `correlate` \| `trace_rpc` \| `waves`) |
 | `sym_http` | Unified HTTP + RPC request analysis with slow-request detection (mode: `requests` \| `slow` \| `rates` \| `totals`) |
 | `sym_ui_thread` | Detect UI thread freezes and deadlocks with multi-file support, configurable freeze threshold, and time filtering |
 | `sym_health` | Health dashboard or memory/CPU trends from sccp logs (mode: `dashboard` \| `trends`) |

@@ -1,12 +1,30 @@
 /**
  * tool-registry.ts
  *
- * MCP tool definitions (name, description, inputSchema) for all 19 Symphony log tools.
+ * MCP tool definitions (name, description, inputSchema) for Symphony log tools.
  * Pure data — no handler logic.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const TOOLS: any[] = [
+const TOOL_DEFS: any[] = [
+  {
+    name: "sym_open",
+    description:
+      "Set the log directory for this session.  Call this FIRST before using any other sym_* tool. " +
+      "Accepts an absolute path to a directory containing Symphony .txt log files, or a bug report folder. " +
+      "Can be called again to switch to a different directory (resets cached state). " +
+      "If called with no arguments, returns the current directory.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        logDir: {
+          type: "string",
+          description: "Absolute path to a directory containing Symphony log files, or a bug report folder.",
+        },
+      },
+      required: [],
+    },
+  },
   {
     name: "sym_triage",
     description:
@@ -55,18 +73,22 @@ export const TOOLS: any[] = [
       "Modes: " +
       "'errors' — find Error-level entries with deduplication by message fingerprint. Shows unique error patterns with occurrence counts and stack traces. " +
       "'pattern' — search for text or regex (method names, GUIDs, IPs, request types). Supports context lines and level filtering. " +
+      "'count' — count occurrences of a pattern per file. Returns a table with file name, match count, first/last timestamp. " +
+      "Use this to quickly quantify how often something happens across many files without reading full matches. " +
+      "'assert_absent' — prove a pattern does NOT appear. Returns explicit '0 matches in N files (M lines scanned)' confirmation or lists the unexpected matches found. " +
+      "Use this to verify a code path was never taken, an error never occurred, etc. " +
       "'files' accepts exact filenames, a prefix like 'ae', or prefix+date like 'ae-260227'. " +
       "Use startTime/endTime (HH:MM:SS) to narrow to a specific incident window.",
     inputSchema: {
       type: "object",
       properties: {
-        mode:          { type: "string", enum: ["errors", "pattern"], description: "Search mode: 'errors' for Error-level entries, 'pattern' for text/regex search" },
+        mode:          { type: "string", enum: ["errors", "pattern", "count", "assert_absent"], description: "Search mode" },
         files:         { type: "array", items: { type: "string" }, description: "Log filenames, prefixes, or prefix-date patterns" },
-        pattern:       { type: "string", description: "For pattern mode: text or regex to search for" },
-        isRegex:       { type: "boolean", description: "For pattern mode: treat pattern as regex (default false)" },
-        caseSensitive: { type: "boolean", description: "For pattern mode: case sensitive (default false)" },
+        pattern:       { type: "string", description: "For pattern/count/assert_absent: text or regex to search for" },
+        isRegex:       { type: "boolean", description: "For pattern/count/assert_absent: treat pattern as regex (default false)" },
+        caseSensitive: { type: "boolean", description: "For pattern/count/assert_absent: case sensitive (default false)" },
         contextLines:  { type: "number",  description: "For pattern mode: lines of context around each match" },
-        levelFilter:   { type: "array", items: { type: "string" }, description: "For pattern mode: only these levels, e.g. ['Error','BasicInfo']" },
+        levelFilter:   { type: "array", items: { type: "string" }, description: "For pattern/count/assert_absent: only these levels, e.g. ['Error','BasicInfo']" },
         deduplicate:   { type: "boolean", description: "For errors mode: group identical errors (default true)" },
         includeStacks: { type: "boolean", description: "For errors mode: include stack traces (default true)" },
         startTime:     { type: "string", description: "Only include entries at or after HH:MM:SS" },
@@ -130,14 +152,21 @@ export const TOOLS: any[] = [
       "Correlate events across multiple log sources. " +
       "Modes: " +
       "'correlate' — merge entries from multiple log files into a single chronological timeline. Cross-reference client and server activity (e.g. ae + is + cs). Filter by time and level. " +
-      "'trace_rpc' — trace a named RPC request from MobileBridge (Mo log) through InfoService (IS log) using sequence numbers. Shows network latency, processing time, invoking user, and round-trip duration.",
+      "'trace_rpc' — trace a named RPC request from MobileBridge (Mo log) through InfoService (IS log) using sequence numbers. Shows network latency, processing time, invoking user, and round-trip duration. " +
+      "'waves' — find all occurrences of a pattern across files and group them into temporal waves (clusters). " +
+      "A new wave starts when the gap between consecutive matches exceeds gapSeconds (default 300 = 5 min). " +
+      "Reports per-wave: start time, end time, duration, server/file count, match count, first and last match. " +
+      "Ideal for analyzing fan-out patterns (e.g. ForceServerRefreshDeviceGraph across a farm).",
     inputSchema: {
       type: "object",
       properties: {
-        mode:        { type: "string", enum: ["correlate", "trace_rpc"], description: "'correlate' to merge timelines, 'trace_rpc' to trace an RPC call across Mo→IS" },
-        files:       { type: "array", items: { type: "string" }, description: "For correlate: log files to merge" },
+        mode:        { type: "string", enum: ["correlate", "trace_rpc", "waves"], description: "'correlate' to merge timelines, 'trace_rpc' to trace RPC, 'waves' to cluster pattern matches by time" },
+        files:       { type: "array", items: { type: "string" }, description: "For correlate/waves: log files to analyze" },
         levelFilter: { type: "array", items: { type: "string" }, description: "For correlate: e.g. ['Error', 'BasicInfo']" },
         requestName: { type: "string", description: "For trace_rpc: RPC method name, e.g. 'GetDeviceGraphCompressed'" },
+        pattern:     { type: "string", description: "For waves: text or regex to search for" },
+        isRegex:     { type: "boolean", description: "For waves: treat pattern as regex (default false)" },
+        gapSeconds:  { type: "number", description: "For waves: gap between clusters in seconds (default 300 = 5 min)" },
         moFiles:     { type: "array", items: { type: "string" }, description: "For trace_rpc: Mo log file(s). Defaults to all Mo-* files." },
         isFiles:     { type: "array", items: { type: "string" }, description: "For trace_rpc: IS log file(s). Defaults to all is-* files." },
         startTime:   { type: "string", description: "Only include entries at or after HH:MM:SS" },
@@ -473,3 +502,25 @@ export const TOOLS: any[] = [
     },
   },
 ];
+
+// ── Inject logDir override into every tool except sym_open ───────────────────
+
+const LOG_DIR_OVERRIDE_PROP = {
+  logDir: {
+    type: "string",
+    description:
+      "Override log directory for this call only. Absolute path to a log directory or bug report folder. " +
+      "If omitted, uses the directory set by sym_open (or LOG_DIR env var).",
+  },
+};
+
+for (const tool of TOOL_DEFS) {
+  if (tool.name !== "sym_open") {
+    tool.inputSchema.properties = {
+      ...LOG_DIR_OVERRIDE_PROP,
+      ...tool.inputSchema.properties,
+    };
+  }
+}
+
+export const TOOLS = TOOL_DEFS;

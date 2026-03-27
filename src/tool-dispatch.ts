@@ -9,11 +9,11 @@ import type { LogContext } from "./types.js";
 import { toolTriage } from "./tools/triage.js";
 import { toolListLogFiles } from "./tools/list-logs.js";
 import { toolSearchErrors } from "./tools/search-errors.js";
-import { toolSearchPattern } from "./tools/search-pattern.js";
+import { toolSearchPattern, toolSearchCount, toolSearchAssertAbsent } from "./tools/search-pattern.js";
 import { toolGetStackTraces } from "./tools/stack-traces.js";
 import { toolGetServiceLifecycle, toolDetectLogGaps } from "./tools/service-lifecycle.js";
 import { toolGetUiThreadActivity } from "./tools/ui-thread.js";
-import { toolCorrelateTimelines } from "./tools/correlate-timeline.js";
+import { toolCorrelateTimelines, toolWaveAnalysis } from "./tools/correlate-timeline.js";
 import { toolGetProcessLifetimes } from "./tools/process-lifetimes.js";
 import { toolGetPdCrashes } from "./tools/pd-crashes.js";
 import { toolTraceMbRequest } from "./tools/trace-mb-request.js";
@@ -150,6 +150,27 @@ export async function dispatchToolCall(
           endTime:       a.endTime       as string | undefined,
           limit:         a.limit         as number | undefined,
         });
+      } else if (mode === "count") {
+        return await toolSearchCount(ctx.dirs, {
+          files:         a.files         as string[],
+          pattern:       a.pattern       as string,
+          isRegex:       a.isRegex       as boolean | undefined,
+          caseSensitive: a.caseSensitive as boolean | undefined,
+          levelFilter:   a.levelFilter   as string[] | undefined,
+          startTime:     a.startTime     as string | undefined,
+          endTime:       a.endTime       as string | undefined,
+        });
+      } else if (mode === "assert_absent") {
+        return await toolSearchAssertAbsent(ctx.dirs, {
+          files:         a.files         as string[],
+          pattern:       a.pattern       as string,
+          isRegex:       a.isRegex       as boolean | undefined,
+          caseSensitive: a.caseSensitive as boolean | undefined,
+          levelFilter:   a.levelFilter   as string[] | undefined,
+          startTime:     a.startTime     as string | undefined,
+          endTime:       a.endTime       as string | undefined,
+          limit:         a.limit         as number | undefined,
+        });
       }
       throw new Error(`sym_search: unknown mode '${mode}'`);
     }
@@ -208,7 +229,7 @@ export async function dispatchToolCall(
       throw new Error(`sym_lifecycle: unknown mode '${mode}'`);
     }
 
-    // ---- sym_timeline: correlate + trace_rpc ----
+    // ---- sym_timeline: correlate + trace_rpc + waves ----
     case "sym_timeline": {
       const mode = a.mode as string;
       if (mode === "correlate") {
@@ -227,6 +248,16 @@ export async function dispatchToolCall(
           startTime:   a.startTime  as string | undefined,
           endTime:     a.endTime    as string | undefined,
           limit:       a.limit      as number | undefined,
+        });
+      } else if (mode === "waves") {
+        return await toolWaveAnalysis(ctx.dirs, {
+          files:      a.files      as string[],
+          pattern:    a.pattern    as string,
+          isRegex:    a.isRegex    as boolean | undefined,
+          gapSeconds: a.gapSeconds as number | undefined,
+          startTime:  a.startTime  as string | undefined,
+          endTime:    a.endTime    as string | undefined,
+          limit:      a.limit      as number | undefined,
         });
       }
       throw new Error(`sym_timeline: unknown mode '${mode}'`);

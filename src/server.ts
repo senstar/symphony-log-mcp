@@ -21,10 +21,16 @@ const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
 
 /**
- * Log directory (or bug report folder) can be overridden by the LOG_DIR
- * environment variable or passed as the first command-line argument.
+ * Log directory (or bug report folder).
+ *
+ * Can be pre-set via LOG_DIR environment variable or the first CLI argument.
+ * At runtime, use sym_open to point at a directory — this resets the cached
+ * context so all subsequent tool calls use the new path.
+ *
+ * There is deliberately NO default.  Silently reading from C:\Log (which is
+ * often a junction to a live production server) is a safety hazard.
  */
-const LOG_DIR_RAW: string = process.env.LOG_DIR ?? process.argv[2] ?? "C:\\Log";
+let _currentLogDir: string | null = process.env.LOG_DIR ?? process.argv[2] ?? null;
 
 // ------------------------------------------------------------------ temp cleanup
 
@@ -67,25 +73,60 @@ function cleanStaleTempDirs(): void {
 
 let _logContext: LogContext | null = null;
 
-async function getLogContext(): Promise<LogContext> {
-  if (_logContext) return _logContext;
-
-  if (await isBugReportFolder(LOG_DIR_RAW)) {
-    const bugReport = await extractBugReport(LOG_DIR_RAW);
+/**
+ * Compute a fresh LogContext for a given directory.
+ */
+async function computeLogContext(dir: string): Promise<LogContext> {
+  if (await isBugReportFolder(dir)) {
+    const bugReport = await extractBugReport(dir);
     const serverDirs = bugReport.servers.filter(s => !s.isClient && s.logDir);
-    _logContext = {
+    return {
       dirs:         serverDirs.map(s => s.logDir),
       serverLabels: serverDirs.map(s => s.label),
       bugReport,
     };
-    console.error(
-      `symphony-log-mcp: bug report mode — ${serverDirs.length} server(s) from ${LOG_DIR_RAW}`
-    );
-  } else {
-    _logContext = { dirs: LOG_DIR_RAW, bugReport: null };
+  }
+  return { dirs: dir, bugReport: null };
+}
+
+/**
+ * Return the active LogContext, computing it lazily on first use.
+ *
+ * @param overrideDir  If provided, compute a one-shot context for this
+ *                     directory without touching the session-level cache.
+ */
+async function getLogContext(overrideDir?: string): Promise<LogContext> {
+  // Per-call override — compute fresh, don't cache
+  if (overrideDir) {
+    return await computeLogContext(overrideDir);
   }
 
+  // Session-level directory must be set
+  if (!_currentLogDir) {
+    throw new Error(
+      "No log directory configured. Call sym_open with a directory path, " +
+      "or set the LOG_DIR environment variable."
+    );
+  }
+
+  if (_logContext) return _logContext;
+
+  _logContext = await computeLogContext(_currentLogDir);
   return _logContext;
+}
+
+/**
+ * Set (or change) the session-level log directory.  Clears the cached context
+ * so the next tool call will re-initialize from the new path.
+ */
+export function setLogDir(newDir: string): void {
+  _currentLogDir = newDir;
+  _logContext = null;
+}
+
+/** Return the current session-level log directory (may be null). */
+export function getCurrentLogDir(): string | null {
+  return _currentLogDir;
 }
 
 // ------------------------------------------------------------------ server
@@ -133,8 +174,62 @@ export function createServer(): Server {
     const a = (args ?? {}) as Record<string, unknown>;
 
     try {
-      const ctx = await getLogContext();
-      const result = await dispatchToolCall(name, a, ctx, LOG_DIR_RAW);
+      // sym_open is handled directly — it doesn't require an existing LogContext
+      if (name === "sym_open") {
+        const dir = typeof a.logDir === "string" ? a.logDir.trim() : "";
+        if (!dir) {
+          if (_currentLogDir) {
+            return {
+              content: [{ type: "text", text: `Current log directory: ${_currentLogDir}` }],
+            };
+          }
+          return {
+            content: [{ type: "text", text: "Error: logDir parameter is required." }],
+            isError: true,
+          };
+        }
+        // Validate path exists
+        try {
+          const stat = fs.statSync(dir);
+          if (!stat.isDirectory()) {
+            return {
+              content: [{ type: "text", text: `Error: '${dir}' is not a directory.` }],
+              isError: true,
+            };
+          }
+        } catch {
+          return {
+            content: [{ type: "text", text: `Error: '${dir}' does not exist or is not accessible.` }],
+            isError: true,
+          };
+        }
+        setLogDir(dir);
+        // Eagerly initialize to report mode and file count
+        const ctx = await getLogContext();
+        const fileCount = Array.isArray(ctx.dirs)
+          ? ctx.dirs.length + " server directories"
+          : "single directory";
+        const mode = ctx.bugReport ? "bug report" : "log directory";
+        return {
+          content: [{
+            type: "text",
+            text: `Opened ${mode}: ${dir} (${fileCount}).` +
+              (ctx.bugReport
+                ? `\nProduct: ${ctx.bugReport.productVersion}, Farm: ${ctx.bugReport.farmName}\nServers: ${ctx.bugReport.servers.filter(s => !s.isClient).map(s => s.label).join(", ")}`
+                : "") +
+              "\nAll sym_* tools will now use this directory.",
+          }],
+        };
+      }
+
+      // Per-call logDir override
+      const overrideDir = typeof a.logDir === "string" && a.logDir.trim()
+        ? a.logDir.trim()
+        : undefined;
+
+      const ctx = await getLogContext(overrideDir);
+      const logDirDisplay = overrideDir ?? _currentLogDir ?? "(not set)";
+      const result = await dispatchToolCall(name, a, ctx, logDirDisplay);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -153,5 +248,8 @@ export async function main() {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`symphony-log-mcp v${version} running. Log directory: ${LOG_DIR_RAW}`);
+  console.error(
+    `symphony-log-mcp v${version} running. ` +
+    (_currentLogDir ? `Log directory: ${_currentLogDir}` : "No log directory set — use sym_open.")
+  );
 }

@@ -501,6 +501,152 @@ const TOOL_DEFS: any[] = [
       required: ["log"],
     },
   },
+  {
+    name: "sym_farm",
+    description:
+      "Farm-wide analysis across multiple Symphony server log packages. " +
+      "Point at a parent directory containing server log folders (e.g., a full farm log collection) " +
+      "and get an aggregated dashboard without needing to sym_open each server individually. " +
+      "Modes: " +
+      "'dashboard' — one-line per server showing process counts, restart counts, error counts, and overall status. " +
+      "'errors' — aggregated error patterns across all servers, ranked by frequency, showing which servers are affected. " +
+      "'topology' — server roles and inter-server relationships inferred from log content. " +
+      "'cameras' — camera count per server and problem cameras across the farm. " +
+      "'connectivity' — NxN server ALIVE matrix showing who sees whom, detecting one-way communication and isolated servers.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        parentDir: {
+          type: "string",
+          description: "Absolute path to a directory containing multiple server log package folders.",
+        },
+        mode: {
+          type: "string",
+          enum: ["dashboard", "errors", "topology", "cameras", "connectivity"],
+          description: "Analysis mode (default 'dashboard')",
+        },
+        limit: { type: "number", description: "Max results per section (default 50)" },
+      },
+      required: ["parentDir"],
+    },
+  },
+  {
+    name: "sym_auth",
+    description:
+      "Analyze authentication and session events from Symphony IS logs. " +
+      "Detects AD authentication failures, EstablishSecureScope failures, " +
+      "session creation errors, credential issues, and login/logout events. " +
+      "Answers 'why can't this user log in?' and 'are there authentication storms?' " +
+      "Modes: " +
+      "'summary' — count overview by category with affected usernames. " +
+      "'failures' — chronological failure listing with deduplication. " +
+      "'sessions' — login/logout event timeline with session tracking.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode:         { type: "string", enum: ["summary", "failures", "sessions"], description: "Analysis mode (default 'summary')" },
+        files:        { type: "array", items: { type: "string" }, description: "Log files (default: 'is' — auto-detected)" },
+        userFilter:   { type: "string", description: "Filter by username substring" },
+        startTime:    { type: "string", description: "Only include events at or after HH:MM:SS" },
+        endTime:      { type: "string", description: "Only include events at or before HH:MM:SS" },
+        limit:        { type: "number", description: "Max results (default 50)" },
+      },
+      required: ["mode"],
+    },
+  },
+  {
+    name: "sym_db_health",
+    description:
+      "Analyze database connectivity and health from Symphony IS logs. " +
+      "Detects DB connection failures, SQL exceptions, connection pool exhaustion, " +
+      "command timeouts, and DB recovery events. Clusters failure bursts into outage windows. " +
+      "Answers 'was the DB down?' and 'when did it come back?' " +
+      "Modes: " +
+      "'summary' — overview with outage detection, time span, and failure categories. " +
+      "'outages' — detected outage windows with start time, duration, and event count. " +
+      "'events' — chronological event listing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode:      { type: "string", enum: ["summary", "outages", "events"], description: "Analysis mode (default 'summary')" },
+        files:     { type: "array", items: { type: "string" }, description: "Log files (default: 'is' — auto-detected)" },
+        startTime: { type: "string", description: "Only include events at or after HH:MM:SS" },
+        endTime:   { type: "string", description: "Only include events at or before HH:MM:SS" },
+        limit:     { type: "number", description: "Max results (default 50)" },
+      },
+      required: ["mode"],
+    },
+  },
+  {
+    name: "sym_cameras",
+    description:
+      "Analyze camera inventory and status from Tracker (cs*) log files. " +
+      "Discovers cameras from cs{N}_vidcaps.txt capability files and cs{N}-*.txt log files. " +
+      "Scans for disconnects, URL errors, frame drops, and connection issues. " +
+      "Modes: " +
+      "'inventory' — list all discovered cameras with ID range, vidcaps presence, and log file counts. " +
+      "'problems' — cameras ranked by error count with breakdown by type (disconnects, URL errors, frame drops). " +
+      "'status' — healthy/unhealthy camera overview.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode:         { type: "string", enum: ["inventory", "problems", "status"], description: "Analysis mode (default 'inventory')" },
+        cameraFilter: { type: "string", description: "Filter by camera ID number" },
+        files:        { type: "array", items: { type: "string" }, description: "Tracker log files to scan (default: auto-detect cs* files)" },
+        limit:        { type: "number", description: "Max results (default 50)" },
+      },
+      required: ["mode"],
+    },
+  },
+  {
+    name: "sym_interserver",
+    description:
+      "Analyze inter-server communication patterns from Symphony IS logs. " +
+      "Tracks ALIVE/PING heartbeat messages, ConnectionException errors, " +
+      "ExecuteOnProxy failures, and ClientTerminated events. " +
+      "Answers 'can this server talk to the others?' and 'which links are failing?' " +
+      "Modes: " +
+      "'summary' — event type breakdown with failure targets ranked by frequency. " +
+      "'map' — server communication map showing ALIVE send/recv counts and failure counts per target. " +
+      "'failures' — chronological listing of communication failures.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode:         { type: "string", enum: ["summary", "map", "failures"], description: "Analysis mode (default 'summary')" },
+        files:        { type: "array", items: { type: "string" }, description: "Log files (default: 'is' — auto-detected)" },
+        serverFilter: { type: "string", description: "Filter by server ID or IP substring" },
+        startTime:    { type: "string", description: "Only include events at or after HH:MM:SS" },
+        endTime:      { type: "string", description: "Only include events at or before HH:MM:SS" },
+        limit:        { type: "number", description: "Max results (default 50)" },
+      },
+      required: ["mode"],
+    },
+  },
+  {
+    name: "sym_hw",
+    description:
+      "Analyze hardware integration events from Symphony logs. " +
+      "Detects Advantech/ADAM device errors, serial port issues, door controller events, " +
+      "IO module status, and general hardware connection failures. " +
+      "Answers 'are the hardware integrations working?' and 'which devices are failing?' " +
+      "Modes: " +
+      "'summary' — overview by category and severity with known device inventory. " +
+      "'advantech' — Advantech/ADAM specific events. " +
+      "'devices' — device inventory with event and error counts. " +
+      "'errors' — all hardware errors in chronological order.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mode:         { type: "string", enum: ["summary", "advantech", "devices", "errors"], description: "Analysis mode (default 'summary')" },
+        files:        { type: "array", items: { type: "string" }, description: "Log files (default: 'is', 'ac', 'hm' — auto-detected)" },
+        deviceFilter: { type: "string", description: "Filter by device name, IP, or COM port" },
+        startTime:    { type: "string", description: "Only include events at or after HH:MM:SS" },
+        endTime:      { type: "string", description: "Only include events at or before HH:MM:SS" },
+        limit:        { type: "number", description: "Max results (default 50)" },
+      },
+      required: ["mode"],
+    },
+  },
 ];
 
 // ── Inject logDir override into every tool except sym_open ───────────────────

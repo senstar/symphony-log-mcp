@@ -86,7 +86,33 @@ async function computeLogContext(dir: string): Promise<LogContext> {
       bugReport,
     };
   }
-  return { dirs: dir, bugReport: null };
+  // Auto-detect Log/ or Logs/ subdirectory (common in extracted log packages)
+  const resolved = await resolveLogSubdir(dir);
+  return { dirs: resolved, bugReport: null };
+}
+
+/**
+ * If `dir` itself contains Symphony log files, return it as-is.
+ * Otherwise check for a `Log/` or `Logs/` child (common layout in
+ * extracted server log packages) and return that instead.
+ */
+async function resolveLogSubdir(dir: string): Promise<string> {
+  // Quick check: does the directory itself contain any log-formatted files?
+  try {
+    const entries = fs.readdirSync(dir);
+    const hasLogs = entries.some(e => /^[a-zA-Z]+-\d{6}_\d+\.txt$/i.test(e));
+    if (hasLogs) return dir;
+  } catch { /* ignore */ }
+
+  // Try Log/ then Logs/ subdirectories
+  for (const sub of ["Log", "Logs"]) {
+    const candidate = path.join(dir, sub);
+    try {
+      const stat = fs.statSync(candidate);
+      if (stat.isDirectory()) return candidate;
+    } catch { /* not found */ }
+  }
+  return dir;
 }
 
 /**
@@ -206,6 +232,8 @@ export function createServer(): Server {
         setLogDir(dir);
         // Eagerly initialize to report mode and file count
         const ctx = await getLogContext();
+        const resolvedDir = Array.isArray(ctx.dirs) ? ctx.dirs[0] : ctx.dirs;
+        const wasRedirected = resolvedDir !== dir;
         const fileCount = Array.isArray(ctx.dirs)
           ? ctx.dirs.length + " server directories"
           : "single directory";
@@ -214,6 +242,7 @@ export function createServer(): Server {
           content: [{
             type: "text",
             text: `Opened ${mode}: ${dir} (${fileCount}).` +
+              (wasRedirected ? `\nAuto-detected log subdirectory: ${resolvedDir}` : "") +
               (ctx.bugReport
                 ? `\nProduct: ${ctx.bugReport.productVersion}, Farm: ${ctx.bugReport.farmName}\nServers: ${ctx.bugReport.servers.filter(s => !s.isClient).map(s => s.label).join(", ")}`
                 : "") +

@@ -146,7 +146,12 @@ export async function toolSummarizeHealth(
   );
   out.push("─".repeat(85));
 
-  for (const row of processRows) {
+  // Collapse stable trackers when many share identical characteristics
+  const TRACKER_RE = /^Tracker\(\d+\)$/;
+  const stableTrackers = processRows.filter(r => r.pattern === "stable" && TRACKER_RE.test(r.name));
+  const nonStableOrNonTracker = processRows.filter(r => !(r.pattern === "stable" && TRACKER_RE.test(r.name)));
+
+  const formatRow = (row: typeof processRows[0]) => {
     const icon =
       row.pattern === "stable" ? "✓"
       : row.pattern === "crash-loop" ? "✗"
@@ -155,9 +160,27 @@ export async function toolSummarizeHealth(
     const runStr = row.longestRunSparse
       ? "< 2 min *"
       : `${Math.round(row.longestRunMins)} min`;
+    return `${(icon + " " + row.name).slice(0, 35).padEnd(35)} ${String(row.restarts).padStart(8)}  ${row.pattern.padEnd(12)}  ${(row.peakMem.toFixed(1) + " MB").padStart(9)}  ${runStr}`;
+  };
+
+  // Show non-tracker and non-stable rows individually
+  for (const row of nonStableOrNonTracker) {
+    out.push(formatRow(row));
+  }
+
+  // Collapse stable trackers into a summary line when there are many
+  if (stableTrackers.length > 5) {
+    const memValues = stableTrackers.map(r => r.peakMem);
+    const minMem = Math.min(...memValues).toFixed(1);
+    const maxMem = Math.max(...memValues).toFixed(1);
+    const longestRun = Math.round(Math.max(...stableTrackers.map(r => r.longestRunMins)));
     out.push(
-      `${(icon + " " + row.name).slice(0, 35).padEnd(35)} ${String(row.restarts).padStart(8)}  ${row.pattern.padEnd(12)}  ${(row.peakMem.toFixed(1) + " MB").padStart(9)}  ${runStr}`
+      `${"✓ " + stableTrackers.length + " Trackers (stable)".slice(0, 33).padEnd(33)} ${"0".padStart(8)}  ${"stable".padEnd(12)}  ${(minMem + "–" + maxMem + " MB").padStart(9)}  ${longestRun} min`
     );
+  } else {
+    for (const row of stableTrackers) {
+      out.push(formatRow(row));
+    }
   }
 
   if (processRows.some(r => r.longestRunSparse)) {

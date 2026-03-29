@@ -79,6 +79,7 @@ const EXACT_PREFIXES: Record<string, PrefixInfo> = {
   su:     { description: "Setup Wizard (client)",   category: "Setup",         side: "client" },
   un:     { description: "Uninstaller",             category: "Tools",         side: "tool" },
   up:     { description: "Upgrade",                 category: "Tools",         side: "tool" },
+  lo:     { description: "Log Monitor",              category: "Server",        side: "server" },
   scax:   { description: "Scheduler – Access Control", category: "Scheduler",  side: "server" },
 };
 

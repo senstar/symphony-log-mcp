@@ -29,6 +29,12 @@ import { toolAccessControl } from "./tools/access-control.js";
 import { toolPermissions } from "./tools/permissions.js";
 import { toolSystemDiag } from "./tools/system-diagnostics.js";
 import { toolEventLog } from "./tools/event-log.js";
+import { toolFarmSummary } from "./tools/farm-summary.js";
+import { toolAuth } from "./tools/auth-analysis.js";
+import { toolDbHealth } from "./tools/db-health.js";
+import { toolCameras } from "./tools/camera-analysis.js";
+import { toolInterServer } from "./tools/interserver.js";
+import { toolHw } from "./tools/hw-analysis.js";
 import { decodePrefix, listKnownPrefixes } from "./lib/prefix-map.js";
 import { getHardwareConfig, formatHardwareConfig } from "./lib/config-parser.js";
 
@@ -416,6 +422,60 @@ export async function dispatchToolCall(
         eventId: a.eventId as number | undefined,
         search:  a.search  as string | undefined,
         limit:   a.limit   as number | undefined,
+      });
+
+    case "sym_farm":
+      return await toolFarmSummary(logDirRaw, {
+        parentDir: a.parentDir as string,
+        mode:      (a.mode as "dashboard" | "errors" | "topology" | "cameras") ?? "dashboard",
+        limit:     a.limit     as number | undefined,
+      });
+
+    case "sym_auth":
+      return await toolAuth(ctx.dirs, {
+        mode:       (a.mode as "summary" | "failures" | "sessions") ?? "summary",
+        files:      a.files      as string[] | undefined,
+        userFilter: a.userFilter as string | undefined,
+        startTime:  a.startTime  as string | undefined,
+        endTime:    a.endTime    as string | undefined,
+        limit:      a.limit      as number | undefined,
+      });
+
+    case "sym_db_health":
+      return await toolDbHealth(ctx.dirs, {
+        mode:      (a.mode as "summary" | "outages" | "events") ?? "summary",
+        files:     a.files     as string[] | undefined,
+        startTime: a.startTime as string | undefined,
+        endTime:   a.endTime   as string | undefined,
+        limit:     a.limit     as number | undefined,
+      });
+
+    case "sym_cameras":
+      return await toolCameras(ctx.dirs, {
+        mode:         (a.mode as "inventory" | "problems" | "status") ?? "inventory",
+        cameraFilter: a.cameraFilter as string | undefined,
+        files:        a.files        as string[] | undefined,
+        limit:        a.limit        as number | undefined,
+      });
+
+    case "sym_interserver":
+      return await toolInterServer(ctx.dirs, {
+        mode:         (a.mode as "summary" | "map" | "failures") ?? "summary",
+        files:        a.files        as string[] | undefined,
+        serverFilter: a.serverFilter as string | undefined,
+        startTime:    a.startTime    as string | undefined,
+        endTime:      a.endTime      as string | undefined,
+        limit:        a.limit        as number | undefined,
+      });
+
+    case "sym_hw":
+      return await toolHw(ctx.dirs, {
+        mode:         (a.mode as "summary" | "advantech" | "devices" | "errors") ?? "summary",
+        files:        a.files        as string[] | undefined,
+        deviceFilter: a.deviceFilter as string | undefined,
+        startTime:    a.startTime    as string | undefined,
+        endTime:      a.endTime      as string | undefined,
+        limit:        a.limit        as number | undefined,
       });
 
     default:

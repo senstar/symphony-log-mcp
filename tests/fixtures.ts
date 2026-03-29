@@ -367,3 +367,40 @@ export const ADDRESS_CONFIG_ERROR_CONTENT = [
   '12:59:10.004   14164 <Error   > Reports\tScheduledReports\tError getting address for id 5003: System.FormatException: Null or blank address',
 ].join('\n');
 
+// ── Crash dump + unhandled exception fixture (AE client crash) ──
+export const CRASH_DUMP_CONTENT = [
+  '03:00:00.000       1 <BasicInf> UI\tMainWindow.Update\tNormal operation',
+  '03:00:05.000       1 <Error   > System\tApplication_ThreadException\tSystem.NullReferenceException: Object reference not set to an instance of an object.',
+  '   at Seer.UI.AlarmPanel.OnTimer()',
+  '03:00:05.100       1 <Error   > System\tMyUnhandledExceptionHandlerTerminator\tFatal: writing dump before exit',
+  '03:00:05.200       1 <BasicInf> System\tDumpWriter\tSaved minidump to C:\\ProgramData\\Senstar\\dumps\\ae_030005.dmp',
+  '03:00:05.300       1 <BasicInf> System\tDumpWriter\tSaved minidump to C:\\ProgramData\\Senstar\\dumps\\ae_030005_full.dmp',
+].join('\n');
+
+// ── DNS resolution failure fixture (AE client can't reach servers) ──
+export const DNS_FAILURE_CONTENT = [
+  '10:00:00.000    1234 <BasicInf> Communication\tConnectionManager.Connect\tConnecting to NODE1',
+  "10:00:01.000    1234 <Error   > Communication\tConnectionManager.Connect\tUnable to resolve server address 'NODE1.corp.local'",
+  "10:00:02.000    1234 <Error   > Communication\tConnectionManager.Connect\tUnable to resolve server address 'NODE2.corp.local'",
+  "10:00:03.000    1234 <Error   > Communication\tConnectionManager.Connect\tUnable to resolve server address 'NODE1.corp.local'",
+  "10:00:04.000    1234 <Error   > Communication\tConnectionManager.Connect\tUnable to resolve server address 'NODE2.corp.local'",
+  "10:00:05.000    1234 <Error   > Communication\tConnectionManager.Connect\tUnable to resolve server address 'NODE1.corp.local'",
+].join('\n');
+
+// ── Session/token failure fixture (IS log with auth session issues) ──
+export const SESSION_FAILURE_CONTENT = [
+  '10:00:00.000    1234 <Error   > Security\tSessionManager.Validate\tTokenNotFoundException: Session token not found in store',
+  '10:00:01.000    1234 <Error   > Security\tSessionManager.Validate\tTokenNotFoundException: Session token not found in store',
+  '10:00:02.000    1234 <Error   > Security\tSessionManager.Validate\tSeer.Exceptions.InvalidSessionException: Session expired',
+  '10:00:03.000    1234 <Error   > Security\tSessionManager.Validate\tTokenNotFoundException: Session token not found in store',
+  '10:00:04.000    1234 <Error   > Security\tSessionManager.Validate\tInvalidSessionID: No matching session',
+].join('\n');
+
+// ── Request delivery failure fixture (AE client delivery issues) ──
+export const DELIVERY_FAILURE_CONTENT = [
+  '10:00:00.000    1234 <Error   > Communication\tMessageRouter.Send\tRequestFailedDelivery for FeatureExists to server 5001',
+  '10:00:01.000    1234 <Error   > Communication\tMessageRouter.Send\tRequestFailedDelivery for GetVideoWallModel to server 5001',
+  '10:00:02.000    1234 <Error   > Communication\tMessageRouter.Send\tCould not retrieve result for ServerConfigPort from server 5001',
+  '10:00:03.000    1234 <Error   > Communication\tMessageRouter.Send\tRequestFailedDelivery for GetCameraList to server 5000',
+].join('\n');
+

@@ -88,6 +88,11 @@ const RE_NO_DISPATCHER = /No\s+message\s+dispatcher.*available\s+to\s+route/i;
 const RE_SERVICE_STOP_REQUEST = /Received\s+request\s+to\s+stop\s+(\w+)/i;
 const RE_PENDING_CHANGES_TIMEOUT = /WaitForPendingChanges\s*\|.*TimeoutException.*waiting\s+(\S+)/i;
 const RE_ADDRESS_ERROR = /Error\s+getting\s+(?:address|FQDN)\s+for\s+id\s+(\d+).*(?:Null\s+or\s+blank\s+address|FormatException)/i;
+const RE_CRASH_DUMP = /Saved\s+minidump\s+to\s+(\S+)/i;
+const RE_UNHANDLED_EXCEPTION = /Application_ThreadException|CurrentDomain_UnhandledException|MyUnhandledExceptionHandlerTerminator/i;
+const RE_DNS_FAILURE = /Unable\s+to\s+resolve\s+server\s+address\s+'([^']+)'/i;
+const RE_SESSION_FAILURE = /TokenNotFoundException|InvalidSession(?:Exception|ID)|Seer\.Exceptions\.InvalidSessionException/i;
+const RE_DELIVERY_FAILURE = /RequestFailedDelivery|Could\s+not\s+retrieve\s+result/i;
 
 export interface ConnectivityFindings {
   seemsFailedServers: string[];
@@ -113,6 +118,16 @@ export interface ConnectivityFindings {
   pendingChangesTimeouts: string[];
   /** Servers with missing/blank address config: serverId → count */
   addressErrors: Map<string, number>;
+  /** Crash dumps saved (minidump paths) */
+  crashDumps: string[];
+  /** Unhandled exception / crash events */
+  unhandledExceptionCount: number;
+  /** DNS resolution failures: hostname → count */
+  dnsFailures: Map<string, number>;
+  /** Session/token failures */
+  sessionFailureCount: number;
+  /** Request delivery failures (broader than No message dispatcher) */
+  deliveryFailureCount: number;
 }
 
 /**
@@ -141,9 +156,17 @@ export async function scanConnectivity(
     serviceStopRequests: new Map(),
     pendingChangesTimeouts: [],
     addressErrors: new Map(),
+    crashDumps: [],
+    unhandledExceptionCount: 0,
+    dnsFailures: new Map(),
+    sessionFailureCount: 0,
+    deliveryFailureCount: 0,
   };
 
-  const paths = await resolveFileRefs(["is"], logDir);
+  // Scan IS and AE logs for connectivity/crash/session issues
+  const isPaths = await resolveFileRefs(["is"], logDir);
+  const aePaths = await resolveFileRefs(["ae"], logDir);
+  const paths = [...isPaths, ...aePaths];
   if (paths.length === 0) return findings;
 
   const deltaCacheTimes: number[] = [];
@@ -255,6 +278,36 @@ export async function scanConnectivity(
       if (addrMatch) {
         const serverId = addrMatch[1];
         findings.addressErrors.set(serverId, (findings.addressErrors.get(serverId) ?? 0) + 1);
+      }
+
+      // Crash dump saved — process crashed and wrote minidump
+      const crashMatch = RE_CRASH_DUMP.exec(msg);
+      if (crashMatch) {
+        findings.crashDumps.push(crashMatch[1]);
+      }
+
+      // Unhandled exception — process about to crash
+      // Check both source (method name) and message — these patterns appear as
+      // the source/method in AE logs (e.g., "System\tApplication_ThreadException\t...")
+      if (RE_UNHANDLED_EXCEPTION.test(msg) || RE_UNHANDLED_EXCEPTION.test(entry.line.source)) {
+        findings.unhandledExceptionCount++;
+      }
+
+      // DNS resolution failure — can't reach server by hostname
+      const dnsMatch = RE_DNS_FAILURE.exec(msg);
+      if (dnsMatch) {
+        const host = dnsMatch[1];
+        findings.dnsFailures.set(host, (findings.dnsFailures.get(host) ?? 0) + 1);
+      }
+
+      // Session/token failure — expired or invalid session
+      if (RE_SESSION_FAILURE.test(msg)) {
+        findings.sessionFailureCount++;
+      }
+
+      // Request delivery failure — broader connectivity issue
+      if (RE_DELIVERY_FAILURE.test(msg)) {
+        findings.deliveryFailureCount++;
       }
     }
   }
@@ -671,6 +724,71 @@ export async function toolTriage(
         category: "Configuration",
         message: `Server(s) with missing address config: ${servers}`,
         drillDown: "sym_search pattern='Error getting address'",
+      });
+    }
+
+    // Crash dumps — process crashed hard enough to save minidump
+    if (conn.crashDumps.length > 0) {
+      findings.push({
+        severity: "CRITICAL",
+        category: "Crashes",
+        message: `${conn.crashDumps.length} crash dump(s) saved — process crash detected`,
+        drillDown: "sym_search pattern='Saved minidump'",
+      });
+    }
+
+    // Unhandled exceptions — process about to crash or crashing
+    if (conn.unhandledExceptionCount > 0) {
+      findings.push({
+        severity: "CRITICAL",
+        category: "Crashes",
+        message: `${conn.unhandledExceptionCount} unhandled exception event(s) — application crash(es)`,
+        drillDown: "sym_search pattern='UnhandledException'",
+      });
+    }
+
+    // DNS resolution failures
+    if (conn.dnsFailures.size > 0) {
+      const hosts = [...conn.dnsFailures.entries()].map(([h, n]) => `${h} (×${n})`).join(", ");
+      findings.push({
+        severity: "WARNING",
+        category: "Connectivity",
+        message: `DNS resolution failures: ${hosts}`,
+        drillDown: "sym_search pattern='Unable to resolve server address'",
+      });
+    }
+
+    // Session/token failures
+    if (conn.sessionFailureCount > 20) {
+      findings.push({
+        severity: "WARNING",
+        category: "Security",
+        message: `${conn.sessionFailureCount} session/token failure(s) — possible session expiry or auth issues`,
+        drillDown: "sym_search pattern='TokenNotFoundException'",
+      });
+    } else if (conn.sessionFailureCount > 0) {
+      findings.push({
+        severity: "INFO",
+        category: "Security",
+        message: `${conn.sessionFailureCount} session/token failure(s)`,
+        drillDown: "sym_search pattern='TokenNotFoundException'",
+      });
+    }
+
+    // Request delivery failures (broader than No message dispatcher)
+    if (conn.deliveryFailureCount > 10) {
+      findings.push({
+        severity: "WARNING",
+        category: "Connectivity",
+        message: `${conn.deliveryFailureCount} request delivery failure(s) — server communication disrupted`,
+        drillDown: "sym_search pattern='RequestFailedDelivery'",
+      });
+    } else if (conn.deliveryFailureCount > 0) {
+      findings.push({
+        severity: "INFO",
+        category: "Connectivity",
+        message: `${conn.deliveryFailureCount} request delivery failure(s)`,
+        drillDown: "sym_search pattern='RequestFailedDelivery'",
       });
     }
 

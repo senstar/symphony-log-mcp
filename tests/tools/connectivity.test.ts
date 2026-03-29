@@ -26,6 +26,10 @@ import {
   SERVICE_RESTART_CAUSE_CONTENT,
   PENDING_CHANGES_TIMEOUT_CONTENT,
   ADDRESS_CONFIG_ERROR_CONTENT,
+  CRASH_DUMP_CONTENT,
+  DNS_FAILURE_CONTENT,
+  SESSION_FAILURE_CONTENT,
+  DELIVERY_FAILURE_CONTENT,
 } from "../fixtures.js";
 
 // ── scanConnectivity (unit) ──────────────────────────────────────────────────
@@ -199,6 +203,50 @@ describe("scanConnectivity", () => {
     expect(conn.addressErrors.get("5002")).toBe(3);
     expect(conn.addressErrors.get("5003")).toBe(1);
   });
+
+  it("detects crash dumps in AE logs", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": CRASH_DUMP_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.crashDumps.length).toBe(2);
+    expect(conn.crashDumps[0]).toContain("ae_030005.dmp");
+  });
+
+  it("detects unhandled exceptions in AE logs", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": CRASH_DUMP_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    // Application_ThreadException + MyUnhandledExceptionHandlerTerminator
+    expect(conn.unhandledExceptionCount).toBe(2);
+  });
+
+  it("detects DNS resolution failures", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": DNS_FAILURE_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.dnsFailures.size).toBe(2);
+    expect(conn.dnsFailures.get("NODE1.corp.local")).toBe(3);
+    expect(conn.dnsFailures.get("NODE2.corp.local")).toBe(2);
+  });
+
+  it("detects session/token failures in IS logs", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": SESSION_FAILURE_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.sessionFailureCount).toBe(5);
+  });
+
+  it("detects request delivery failures in AE logs", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": DELIVERY_FAILURE_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.deliveryFailureCount).toBe(4);
+  });
 });
 
 // ── Triage with connectivity ─────────────────────────────────────────────────
@@ -335,6 +383,53 @@ describe("toolTriage connectivity findings", () => {
     const result = await toolTriage(testDir.dir, null, {});
     expect(result).toContain("missing address config");
     expect(result).toContain("Configuration");
+  });
+
+  it("reports crash dumps as CRITICAL in triage", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": CRASH_DUMP_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("crash dump");
+    expect(result).toContain("CRITICAL");
+    expect(result).toContain("Crashes");
+  });
+
+  it("reports unhandled exceptions as CRITICAL in triage", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": CRASH_DUMP_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("unhandled exception");
+    expect(result).toContain("CRITICAL");
+  });
+
+  it("reports DNS failures as WARNING in triage", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": DNS_FAILURE_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("DNS resolution");
+    expect(result).toContain("NODE1.corp.local");
+    expect(result).toContain("WARNING");
+  });
+
+  it("reports session failures as INFO when count is low", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": SESSION_FAILURE_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("session/token failure");
+    expect(result).toContain("5");
+  });
+
+  it("reports delivery failures as INFO when count is low", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": DELIVERY_FAILURE_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("delivery failure");
+    expect(result).toContain("4");
   });
 });
 

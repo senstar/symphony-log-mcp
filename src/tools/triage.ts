@@ -93,6 +93,19 @@ const RE_UNHANDLED_EXCEPTION = /Application_ThreadException|CurrentDomain_Unhand
 const RE_DNS_FAILURE = /Unable\s+to\s+resolve\s+server\s+address\s+'([^']+)'/i;
 const RE_SESSION_FAILURE = /TokenNotFoundException|InvalidSession(?:Exception|ID)|Seer\.Exceptions\.InvalidSessionException/i;
 const RE_DELIVERY_FAILURE = /RequestFailedDelivery|Could\s+not\s+retrieve\s+result/i;
+const RE_LOG_LEVEL_CHANGED = /Logging\s+level\s+changed\s+to:\s*(.+)/i;
+const RE_UPDATE_SERVER_LOG_LEVEL = /UpdateServerLogLevel\s*\|\s*Updating\s+logging\s+level\s+for\s+(\w+)\s+to:\s*'([^']+)'/i;
+const RE_UPDATE_CAMERA_LOG_LEVEL = /UpdateCameraLogLevel\s*\|\s*Updating\s+logging\s+level\s+for\s+camera\s+(\d+)\s+to:\s*'([^']+)'/i;
+
+/** Parsed log level configuration for a single process or camera */
+export interface LogLevelInfo {
+  /** The declared levels, e.g. "BasicInfo|LogError|MoreInfo|LogDiagnostic|Verbose" */
+  levels: string;
+  /** Whether diagnostic-grade logging is enabled (MoreInfo + LogDiagnostic present) */
+  hasDiagnostic: boolean;
+  /** Timestamp of the last level change */
+  timestamp: string;
+}
 
 export interface ConnectivityFindings {
   seemsFailedServers: string[];
@@ -128,6 +141,16 @@ export interface ConnectivityFindings {
   sessionFailureCount: number;
   /** Request delivery failures (broader than No message dispatcher) */
   deliveryFailureCount: number;
+  /** Log level for the IS process (last declared level) */
+  isLogLevel: LogLevelInfo | null;
+  /** Log level for the AE/client process (last declared level) */
+  aeLogLevel: LogLevelInfo | null;
+  /** Per-service log levels from UpdateServerLogLevel: service → LogLevelInfo */
+  serverLogLevels: Map<string, LogLevelInfo>;
+  /** Per-camera log levels from UpdateCameraLogLevel: cameraId → LogLevelInfo */
+  cameraLogLevels: Map<string, LogLevelInfo>;
+  /** Observed log level distribution: level name → entry count (heuristic fallback) */
+  observedLevels: Map<string, number>;
 }
 
 /**
@@ -161,6 +184,11 @@ export async function scanConnectivity(
     dnsFailures: new Map(),
     sessionFailureCount: 0,
     deliveryFailureCount: 0,
+    isLogLevel: null,
+    aeLogLevel: null,
+    serverLogLevels: new Map(),
+    cameraLogLevels: new Map(),
+    observedLevels: new Map(),
   };
 
   // Scan IS and AE logs for connectivity/crash/session issues
@@ -169,6 +197,7 @@ export async function scanConnectivity(
   const paths = [...isPaths, ...aePaths];
   if (paths.length === 0) return findings;
 
+  const isPathSet = new Set(isPaths);
   const deltaCacheTimes: number[] = [];
   const seenSeemsFailed = new Set<string>();
   const aliveTargetSet = new Set<string>();
@@ -177,9 +206,50 @@ export async function scanConnectivity(
     let entries;
     try { entries = await readLogEntries(fullPath); } catch { continue; }
 
+    const isISFile = isPathSet.has(fullPath);
+
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, startTime, endTime)) continue;
       const msg = entry.line.message;
+
+      // Track observed log level distribution (for heuristic fallback)
+      const level = entry.line.level;
+      findings.observedLevels.set(level, (findings.observedLevels.get(level) ?? 0) + 1);
+
+      // Explicit "Logging level changed to:" — last one wins per file type
+      const llMatch = RE_LOG_LEVEL_CHANGED.exec(msg);
+      if (llMatch) {
+        const levels = llMatch[1].trim();
+        const info: LogLevelInfo = {
+          levels,
+          hasDiagnostic: /LogDiagnostic|Diagnost/i.test(levels) && /MoreInfo/i.test(levels),
+          timestamp: entry.line.timestamp,
+        };
+        if (isISFile) findings.isLogLevel = info;
+        else findings.aeLogLevel = info;
+      }
+
+      // UpdateServerLogLevel — per-service level declaration
+      const uslMatch = RE_UPDATE_SERVER_LOG_LEVEL.exec(msg);
+      if (uslMatch) {
+        const svc = uslMatch[1];
+        const levels = uslMatch[2];
+        findings.serverLogLevels.set(svc, {
+          levels,
+          hasDiagnostic: /LogDiagnostic|Diagnost/i.test(levels) && /MoreInfo/i.test(levels),
+          timestamp: entry.line.timestamp,
+        });
+      }
+
+      // UpdateCameraLogLevel — per-camera level declaration
+      const uclMatch = RE_UPDATE_CAMERA_LOG_LEVEL.exec(msg);
+      if (uclMatch) {
+        findings.cameraLogLevels.set(uclMatch[1], {
+          levels: uclMatch[2],
+          hasDiagnostic: /LogDiagnostic|Diagnost/i.test(uclMatch[2]) && /MoreInfo/i.test(uclMatch[2]),
+          timestamp: entry.line.timestamp,
+        });
+      }
 
       // SEEMS FAILED — logged at BasicInfo level, not Error
       const sfMatch = RE_SEEMS_FAILED.exec(msg);
@@ -790,6 +860,70 @@ export async function toolTriage(
         message: `${conn.deliveryFailureCount} request delivery failure(s)`,
         drillDown: "sym_search pattern='RequestFailedDelivery'",
       });
+    }
+
+    // Log level quality — warn if logs lack diagnostic detail
+    const isLevel = conn.isLogLevel;
+    const aeLevel = conn.aeLogLevel;
+
+    if (isLevel && !isLevel.hasDiagnostic) {
+      findings.push({
+        severity: "WARNING",
+        category: "Log Quality",
+        message: `Server (IS) log level is minimal: ${isLevel.levels} — missing diagnostic data, increase to include MoreInfo + LogDiagnostic`,
+        drillDown: "sym_search pattern='Logging level changed'",
+      });
+    } else if (!isLevel && conn.observedLevels.size > 0) {
+      // Heuristic: if we have IS entries but no explicit level message, check distribution
+      const hasDiag = (conn.observedLevels.get("Diagnostic") ?? 0) > 0;
+      const hasMore = (conn.observedLevels.get("MoreInfo") ?? 0) > 0;
+      if (!hasDiag && !hasMore) {
+        findings.push({
+          severity: "WARNING",
+          category: "Log Quality",
+          message: "Server (IS) logs contain only BasicInfo+Error entries — likely minimal log level, missing diagnostic data",
+          drillDown: "sym_search pattern='Logging level changed'",
+        });
+      }
+    }
+    if (isLevel?.hasDiagnostic) {
+      findings.push({
+        severity: "INFO",
+        category: "Log Quality",
+        message: `Server (IS) log level: ${isLevel.levels}`,
+        drillDown: "sym_search pattern='Logging level changed'",
+      });
+    }
+
+    if (aeLevel && !aeLevel.hasDiagnostic) {
+      findings.push({
+        severity: "WARNING",
+        category: "Log Quality",
+        message: `Client (AE) log level is minimal: ${aeLevel.levels} — missing diagnostic data`,
+        drillDown: "sym_search pattern='Logging level changed'",
+      });
+    } else if (aeLevel?.hasDiagnostic) {
+      findings.push({
+        severity: "INFO",
+        category: "Log Quality",
+        message: `Client (AE) log level: ${aeLevel.levels}`,
+        drillDown: "sym_search pattern='Logging level changed'",
+      });
+    }
+
+    // Per-service log levels summary
+    if (conn.serverLogLevels.size > 0) {
+      const minimal = [...conn.serverLogLevels.entries()]
+        .filter(([, info]) => !info.hasDiagnostic)
+        .map(([svc]) => svc);
+      if (minimal.length > 0) {
+        findings.push({
+          severity: "WARNING",
+          category: "Log Quality",
+          message: `Service(s) at minimal log level: ${minimal.join(", ")}`,
+          drillDown: "sym_search pattern='UpdateServerLogLevel'",
+        });
+      }
     }
 
     // Upgrade health rating if one-way communication detected

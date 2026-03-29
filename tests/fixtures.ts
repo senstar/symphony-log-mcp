@@ -404,3 +404,36 @@ export const DELIVERY_FAILURE_CONTENT = [
   '10:00:03.000    1234 <Error   > Communication\tMessageRouter.Send\tRequestFailedDelivery for GetCameraList to server 5000',
 ].join('\n');
 
+// ── IS log with FULL diagnostic log level ──
+export const IS_FULL_LOG_LEVEL_CONTENT = [
+  '11:44:24.451   32716 <BasicInf> Logging level changed to: BasicInfo|LogError',
+  '11:44:29.987   31532 <BasicInf> Logging level changed to: BasicInfo|LogError|MoreInfo|LogDiagnostic|Verbose',
+  '11:45:00.000   31532 <Diagnost> Communication\tMessageDispatcher\tDetailed diagnostic info here',
+  '11:45:01.000   31532 <MoreInfo> Service\tInfoService.OnStart\tLoading configuration',
+  '11:45:02.000   31532 <Verbose > LicenseParser\tLoadXml\tParsing license file',
+].join('\n');
+
+// ── IS log with MINIMAL log level (BasicInfo|LogError only) ──
+export const IS_MINIMAL_LOG_LEVEL_CONTENT = [
+  '11:47:27.462    6512 <BasicInf> Logging level changed to: BasicInfo|LogError',
+  '11:47:28.000    6512 <BasicInf> Service\tInfoService.OnStart\tService starting',
+  '11:47:29.000    6512 <Error   > WebService\tHandler.Execute\tSystem.TimeoutException',
+  '11:47:30.000    6512 <BasicInf> Service\tInfoService.OnStart\tService started successfully',
+].join('\n');
+
+// ── AE log with MINIMAL log level ──
+export const AE_MINIMAL_LOG_LEVEL_CONTENT = [
+  '09:37:52.686   29984 <BasicInf> Logging level changed to: BasicInfo|LogError',
+  '09:37:53.000   29984 <BasicInf> Client settings were not found in registry, using defaults',
+  '09:38:00.000   29984 <Error   > Communication\tConnectionManager.Connect\tConnection refused: 10.60.32.1:8398',
+].join('\n');
+
+// ── IS log with UpdateServerLogLevel and UpdateCameraLogLevel ──
+export const SERVER_CAMERA_LOG_LEVEL_CONTENT = [
+  '12:05:55.902    7524 <BasicInf> Logging level changed to: BasicInfo|LogError|MoreInfo|LogDiagnostic|Verbose',
+  "12:05:55.902    7524 <BasicInf> WebService\tLogSettings\tUpdateServerLogLevel | Updating logging level for InfoService to: 'BasicInfo|LogError|MoreInfo|LogDiagnostic|Verbose|LogPolicies'",
+  "12:05:55.902    7524 <BasicInf> WebService\tLogSettings\tUpdateServerLogLevel | Updating logging level for Scheduler to: 'BasicInfo|LogError'",
+  "12:17:48.967   10040 <BasicInf> WebService\tLogSettings\tUpdateCameraLogLevel | Updating logging level for camera 1 to: 'BasicInfo|LogError|MoreInfo|Verbose|LogDiagnostic|LogPolicies'",
+  "12:24:17.634    1040 <BasicInf> WebService\tLogSettings\tUpdateCameraLogLevel | Updating logging level for camera 2 to: 'BasicInfo|LogError|MoreInfo|Verbose|LogDiagnostic|LogPolicies'",
+].join('\n');
+

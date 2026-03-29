@@ -30,6 +30,10 @@ import {
   DNS_FAILURE_CONTENT,
   SESSION_FAILURE_CONTENT,
   DELIVERY_FAILURE_CONTENT,
+  IS_FULL_LOG_LEVEL_CONTENT,
+  IS_MINIMAL_LOG_LEVEL_CONTENT,
+  AE_MINIMAL_LOG_LEVEL_CONTENT,
+  SERVER_CAMERA_LOG_LEVEL_CONTENT,
 } from "../fixtures.js";
 
 // ── scanConnectivity (unit) ──────────────────────────────────────────────────
@@ -247,6 +251,78 @@ describe("scanConnectivity", () => {
     const conn = await scanConnectivity(testDir.dir);
     expect(conn.deliveryFailureCount).toBe(4);
   });
+
+  it("detects full diagnostic IS log level", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": IS_FULL_LOG_LEVEL_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.isLogLevel).not.toBeNull();
+    expect(conn.isLogLevel!.hasDiagnostic).toBe(true);
+    expect(conn.isLogLevel!.levels).toContain("LogDiagnostic");
+    expect(conn.isLogLevel!.levels).toContain("MoreInfo");
+  });
+
+  it("detects minimal IS log level (BasicInfo|LogError only)", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": IS_MINIMAL_LOG_LEVEL_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.isLogLevel).not.toBeNull();
+    expect(conn.isLogLevel!.hasDiagnostic).toBe(false);
+    expect(conn.isLogLevel!.levels).toBe("BasicInfo|LogError");
+  });
+
+  it("detects minimal AE log level", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": AE_MINIMAL_LOG_LEVEL_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.aeLogLevel).not.toBeNull();
+    expect(conn.aeLogLevel!.hasDiagnostic).toBe(false);
+    expect(conn.aeLogLevel!.levels).toBe("BasicInfo|LogError");
+  });
+
+  it("uses last declared level when level changes mid-file", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": IS_FULL_LOG_LEVEL_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    // File has BasicInfo|LogError first, then full level — last one wins
+    expect(conn.isLogLevel!.hasDiagnostic).toBe(true);
+  });
+
+  it("detects UpdateServerLogLevel per-service levels", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": SERVER_CAMERA_LOG_LEVEL_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.serverLogLevels.size).toBe(2);
+    expect(conn.serverLogLevels.get("InfoService")!.hasDiagnostic).toBe(true);
+    expect(conn.serverLogLevels.get("Scheduler")!.hasDiagnostic).toBe(false);
+  });
+
+  it("detects UpdateCameraLogLevel per-camera levels", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": SERVER_CAMERA_LOG_LEVEL_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    expect(conn.cameraLogLevels.size).toBe(2);
+    expect(conn.cameraLogLevels.get("1")!.hasDiagnostic).toBe(true);
+    expect(conn.cameraLogLevels.get("2")!.hasDiagnostic).toBe(true);
+  });
+
+  it("tracks observed log level distribution", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": IS_FULL_LOG_LEVEL_CONTENT,
+    });
+    const conn = await scanConnectivity(testDir.dir);
+    // Fixture has BasicInf, Diagnost, MoreInfo, Verbose entries
+    expect(conn.observedLevels.get("BasicInfo")).toBeGreaterThan(0);
+    expect(conn.observedLevels.get("Diagnostic")).toBeGreaterThan(0);
+    expect(conn.observedLevels.get("MoreInfo")).toBeGreaterThan(0);
+    expect(conn.observedLevels.get("Verbose")).toBeGreaterThan(0);
+  });
 });
 
 // ── Triage with connectivity ─────────────────────────────────────────────────
@@ -430,6 +506,44 @@ describe("toolTriage connectivity findings", () => {
     const result = await toolTriage(testDir.dir, null, {});
     expect(result).toContain("delivery failure");
     expect(result).toContain("4");
+  });
+
+  it("reports minimal IS log level as WARNING", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": IS_MINIMAL_LOG_LEVEL_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("Log Quality");
+    expect(result).toContain("minimal");
+    expect(result).toContain("WARNING");
+  });
+
+  it("reports full diagnostic IS log level as INFO", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": IS_FULL_LOG_LEVEL_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("Log Quality");
+    expect(result).toContain("Server (IS) log level:");
+  });
+
+  it("reports minimal AE log level as WARNING", async () => {
+    testDir = await createTestLogDir({
+      "ae-260302_01.txt": AE_MINIMAL_LOG_LEVEL_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("Log Quality");
+    expect(result).toContain("Client (AE)");
+    expect(result).toContain("minimal");
+  });
+
+  it("reports service at minimal log level as WARNING", async () => {
+    testDir = await createTestLogDir({
+      "is-260302_01.txt": SERVER_CAMERA_LOG_LEVEL_CONTENT,
+    });
+    const result = await toolTriage(testDir.dir, null, {});
+    expect(result).toContain("Scheduler");
+    expect(result).toContain("minimal log level");
   });
 });
 

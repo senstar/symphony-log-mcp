@@ -229,6 +229,10 @@ export async function resolveFileRefs(fileRefs: string[], logDir: string | strin
 export function isInTimeWindow(timestamp: string, startTime?: string, endTime?: string): boolean {
   if (!startTime && !endTime) return true;
   const t = timestamp.slice(0, 8); // HH:MM:SS
+  if (startTime && endTime && startTime > endTime) {
+    // Midnight-spanning window (e.g. 23:00–01:00): match if at-or-after start OR at-or-before end
+    return t >= startTime || t <= endTime;
+  }
   if (startTime && t < startTime) return false;
   if (endTime && t > endTime) return false;
   return true;
@@ -338,6 +342,67 @@ export async function buildNoFilesFoundMessage(
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Try to read and parse log entries from a file. On failure, pushes a warning
+ * to the provided array and returns null instead of throwing.
+ */
+export async function tryReadLogEntries(
+  fullPath: string,
+  warnings: string[],
+  maxLines?: number,
+): Promise<LogEntry[] | null> {
+  try {
+    return await readLogEntries(fullPath, maxLines);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`[WARNING] Could not read file ${path.basename(fullPath)}: ${msg}`);
+    return null;
+  }
+}
+
+/**
+ * Try to read raw lines from a file. On failure, pushes a warning
+ * to the provided array and returns null instead of throwing.
+ */
+export async function tryReadRawLines(
+  fullPath: string,
+  warnings: string[],
+  maxLines?: number,
+): Promise<string[] | null> {
+  try {
+    return await readRawLines(fullPath, maxLines);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`[WARNING] Could not read file ${path.basename(fullPath)}: ${msg}`);
+    return null;
+  }
+}
+
+/**
+ * Try to read raw lines with time filter. On failure, pushes a warning
+ * to the provided array and returns null instead of throwing.
+ */
+export async function tryReadRawLinesWithTimeFilter(
+  fullPath: string,
+  warnings: string[],
+  startTime?: string,
+  endTime?: string,
+): Promise<string[] | null> {
+  try {
+    return await readRawLinesWithTimeFilter(fullPath, startTime, endTime);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`[WARNING] Could not read file ${path.basename(fullPath)}: ${msg}`);
+    return null;
+  }
+}
+
+/** Append file-read warnings to tool output text. Returns output unchanged if no warnings. */
+export function appendWarnings(output: string, warnings: string[]): string {
+  if (warnings.length === 0) return output;
+  return output + "\n\n" + warnings.join("\n");
 }
 
 /** Format bytes for display */

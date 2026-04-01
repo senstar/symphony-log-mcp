@@ -9,7 +9,7 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import { readLogEntries, resolveFileRefs, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
 
@@ -96,6 +96,7 @@ export async function toolCameras(
   }
 
   // For problems/status modes, scan log files for errors
+  const cameraWarnings: string[] = [];
   if (mode === "problems" || mode === "status") {
     const allFiles = await listLogFiles(logDir);
     const trackerFiles = allFiles.filter(f => f.prefix.startsWith("cs"));
@@ -111,8 +112,8 @@ export async function toolCameras(
       const cam = cameras.get(id);
       if (!cam) continue;
 
-      try {
-        const entries = await readLogEntries(f.fullPath);
+      const entries = await tryReadLogEntries(f.fullPath, cameraWarnings);
+      if (entries) {
         for (const entry of entries) {
           if (entry.line.level === "Error") {
             cam.totalErrors++;
@@ -122,19 +123,19 @@ export async function toolCameras(
             if (RE_FRAME_DROP.test(msg)) cam.frameDrops++;
           }
         }
-      } catch { /* skip */ }
+      }
     }
   }
 
-  if (cameras.size === 0) return "No cameras found in the log directory.";
+  if (cameras.size === 0) return appendWarnings("No cameras found in the log directory.", cameraWarnings);
 
   switch (mode) {
     case "inventory":
-      return formatInventory(cameras, limit);
+      return appendWarnings(formatInventory(cameras, limit), cameraWarnings);
     case "problems":
-      return formatProblems(cameras, limit);
+      return appendWarnings(formatProblems(cameras, limit), cameraWarnings);
     case "status":
-      return formatStatus(cameras, limit);
+      return appendWarnings(formatStatus(cameras, limit), cameraWarnings);
     default:
       return `Unknown mode '${mode}'. Use: inventory, problems, status`;
   }

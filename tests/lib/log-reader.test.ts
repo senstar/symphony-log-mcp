@@ -109,6 +109,50 @@ describe("readRawLinesWithTimeFilter", () => {
   });
 });
 
+describe("isInTimeWindow — midnight-spanning", () => {
+  it("normal window: entry inside is IN", () => {
+    expect(isInTimeWindow("12:00:00", "10:00", "14:00")).toBe(true);
+  });
+
+  it("normal window: entry outside is OUT", () => {
+    expect(isInTimeWindow("08:00:00", "10:00", "14:00")).toBe(false);
+  });
+
+  it("midnight-spanning: entry at 23:30 is IN", () => {
+    expect(isInTimeWindow("23:30:00", "23:00", "02:00")).toBe(true);
+  });
+
+  it("midnight-spanning: entry at 00:30 is IN", () => {
+    expect(isInTimeWindow("00:30:00", "23:00", "02:00")).toBe(true);
+  });
+
+  it("midnight-spanning: entry at 10:00 is OUT", () => {
+    expect(isInTimeWindow("10:00:00", "23:00", "02:00")).toBe(false);
+  });
+
+  it("full day: no start/end matches everything", () => {
+    expect(isInTimeWindow("00:00:00")).toBe(true);
+    expect(isInTimeWindow("12:00:00")).toBe(true);
+    expect(isInTimeWindow("23:59:59")).toBe(true);
+  });
+
+  it("edge: entry exactly at startTime is IN", () => {
+    expect(isInTimeWindow("10:00:00", "10:00", "14:00")).toBe(true);
+  });
+
+  it("edge: entry exactly at endTime is OUT (endTime exclusive with short format)", () => {
+    expect(isInTimeWindow("14:00:00", "10:00", "14:00")).toBe(false);
+  });
+
+  it("edge: midnight-spanning entry exactly at startTime is IN", () => {
+    expect(isInTimeWindow("23:00:00", "23:00", "02:00")).toBe(true);
+  });
+
+  it("edge: midnight-spanning entry exactly at endTime is OUT (endTime exclusive with short format)", () => {
+    expect(isInTimeWindow("02:00:00", "23:00", "02:00")).toBe(false);
+  });
+});
+
 describe("resolveFileRefs", () => {
   let testDir: TestLogDir;
   beforeEach(async () => { testDir = await createTestLogDir(); });

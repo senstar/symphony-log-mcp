@@ -8,7 +8,7 @@
  *   - Build a server communication map
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import * as path from "path";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
@@ -54,13 +54,12 @@ export async function toolInterServer(
 
   const events: InterServerEvent[] = [];
   const ipToServer = new Map<string, string>();
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, startTime, endTime)) continue;
@@ -151,17 +150,17 @@ export async function toolInterServer(
   }
 
   if (events.length === 0) {
-    return "No inter-server communication events found" +
-      (serverFilter ? ` matching '${serverFilter}'` : "") + ".";
+    return appendWarnings("No inter-server communication events found" +
+      (serverFilter ? ` matching '${serverFilter}'` : "") + ".", warnings);
   }
 
   switch (mode) {
     case "summary":
-      return formatSummary(events, ipToServer);
+      return appendWarnings(formatSummary(events, ipToServer), warnings);
     case "map":
-      return formatMap(events, ipToServer);
+      return appendWarnings(formatMap(events, ipToServer), warnings);
     case "failures":
-      return formatFailures(events, limit, ipToServer);
+      return appendWarnings(formatFailures(events, limit, ipToServer), warnings);
     default:
       return `Unknown mode '${mode}'. Use: summary, map, failures`;
   }

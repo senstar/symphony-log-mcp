@@ -8,7 +8,7 @@
  *   - Action execution timing
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import * as path from "path";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
@@ -53,13 +53,12 @@ export async function toolAlarms(
   if (paths.length === 0) return `No alarm log files found. Try specifying files explicitly (scac* prefix).`;
 
   const events: AlarmEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -90,7 +89,7 @@ export async function toolAlarms(
   }
 
   if (events.length === 0) {
-    return `No alarm/event rule activity found in ${paths.length} file(s).`;
+    return appendWarnings(`No alarm/event rule activity found in ${paths.length} file(s).`, warnings);
   }
 
   events.sort((a, b) => a.timestampMs - b.timestampMs);
@@ -155,5 +154,6 @@ export async function toolAlarms(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

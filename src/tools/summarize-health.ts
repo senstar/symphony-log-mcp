@@ -9,7 +9,7 @@
 
 import { computeProcessLifetimes } from "./process-lifetimes.js";
 import { computeErrorGroups } from "./search-errors.js";
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import { isSymphonyProcess } from "../lib/symphony-patterns.js";
 import * as path from "path";
 
@@ -263,9 +263,11 @@ export async function toolMemoryTrends(
 
   // Collect snapshots keyed by normalised process name
   const byProcess = new Map<string, TrendSnapshot[]>();
+  const trendWarnings: string[] = [];
 
   for (const file of resolved) {
-    const entries = await readLogEntries(file);
+    const entries = await tryReadLogEntries(file, trendWarnings);
+    if (!entries) continue;
     for (const entry of entries) {
       if (args.startTime || args.endTime) {
         if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -292,7 +294,7 @@ export async function toolMemoryTrends(
   }
 
   if (byProcess.size === 0) {
-    return "No sccp process data found in the specified files.";
+    return appendWarnings("No sccp process data found in the specified files.", trendWarnings);
   }
 
   // Build trend records
@@ -375,5 +377,6 @@ export async function toolMemoryTrends(
     out.push("  ⚠ = memory growth > 50% (potential leak)");
   }
 
+  if (trendWarnings.length > 0) { out.push(""); out.push(...trendWarnings); }
   return out.join("\n");
 }

@@ -1,4 +1,4 @@
-import { readLogEntries, resolveFileRefs, parseLogFilename, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, parseLogFilename, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import { decodePrefix } from "../lib/prefix-map.js";
 import { timestampToMs } from "../lib/log-parser.js";
 import type { LogEntry } from "../lib/log-parser.js";
@@ -28,6 +28,7 @@ export async function toolCorrelateTimelines(
   const endCmp = args.endTime ?? "23:59:59";
 
   const all: TaggedEntry[] = [];
+  const warnings: string[] = [];
   const resolvedPaths = await resolveFileRefs(args.files, logDir);
 
   // In bug-report mode, determine server label from which dir a file came from
@@ -50,11 +51,9 @@ export async function toolCorrelateTimelines(
       : `${prefix}(${info.description.split(" ")[0]})`;
 
     let entries: LogEntry[];
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch (e) {
-      continue;
-    }
+    const readResult = await tryReadLogEntries(fullPath, warnings);
+    if (!readResult) continue;
+    entries = readResult;
 
     for (const entry of entries) {
       if (levelFilter && !levelFilter.includes(entry.line.level.toLowerCase())) continue;
@@ -63,7 +62,7 @@ export async function toolCorrelateTimelines(
     }
   }
 
-  if (all.length === 0) return "No entries found matching the given criteria.";
+  if (all.length === 0) return appendWarnings("No entries found matching the given criteria.", warnings);
 
   // Sort by timestamp string (HH:MM:SS.mmm sorts lexicographically correctly within a day)
   all.sort((a, b) => a.entry.line.timestamp.localeCompare(b.entry.line.timestamp));
@@ -92,6 +91,7 @@ export async function toolCorrelateTimelines(
     out.push(`\n... ${all.length - limit} more entries. Narrow the time range or add a level filter.`);
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }
 
@@ -137,6 +137,7 @@ export async function toolWaveAnalysis(
   }
 
   const resolvedPaths = await resolveFileRefs(args.files, logDir);
+  const waveWarnings: string[] = [];
 
   // Determine server label for bug-report mode
   const serverLabelFor = (fullPath: string): string | undefined => {
@@ -161,9 +162,9 @@ export async function toolWaveAnalysis(
       : `${prefix}(${info.description.split(" ")[0]})`;
 
     let entries: LogEntry[];
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const readResult = await tryReadLogEntries(fullPath, waveWarnings);
+    if (!readResult) continue;
+    entries = readResult;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -180,7 +181,7 @@ export async function toolWaveAnalysis(
   }
 
   if (allMatches.length === 0) {
-    return `No matches found for pattern '${args.pattern}' across ${resolvedPaths.length} file(s).`;
+    return appendWarnings(`No matches found for pattern '${args.pattern}' across ${resolvedPaths.length} file(s).`, waveWarnings);
   }
 
   // Sort by timestamp
@@ -263,5 +264,6 @@ export async function toolWaveAnalysis(
     out.push(`... ${waves.length - limit} more waves.`);
   }
 
+  if (waveWarnings.length > 0) { out.push(""); out.push(...waveWarnings); }
   return out.join("\n");
 }

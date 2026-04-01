@@ -8,7 +8,7 @@
  *   - DbConnectionFailedException bursts → outage windows
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import { timestampToMs } from "../lib/log-parser.js";
 import * as path from "path";
 
@@ -62,13 +62,12 @@ export async function toolDbHealth(
   if (paths.length === 0) return "No log files found. Try specifying files (e.g., 'is').";
 
   const events: DbEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, startTime, endTime)) continue;
@@ -107,15 +106,15 @@ export async function toolDbHealth(
     }
   }
 
-  if (events.length === 0) return "No database health events found.";
+  if (events.length === 0) return appendWarnings("No database health events found.", warnings);
 
   switch (mode) {
     case "summary":
-      return formatDbSummary(events);
+      return appendWarnings(formatDbSummary(events), warnings);
     case "outages":
-      return formatOutages(events);
+      return appendWarnings(formatOutages(events), warnings);
     case "events":
-      return formatDbEvents(events, limit);
+      return appendWarnings(formatDbEvents(events, limit), warnings);
     default:
       return `Unknown mode '${mode}'. Use: summary, outages, events`;
   }

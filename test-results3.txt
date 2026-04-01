@@ -1,0 +1,95 @@
+﻿
+[1m[46m RUN [49m[22m [36mv4.1.2 [39m[90mD:/Branches/symphony-log-mcp[39m
+
+ [32mΓ£ô[39m tests/tools/search-errors.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 290[2mms[22m[39m
+ [31mΓ¥»[39m tests/tools/storage.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 439[2mms[22m[39m
+[31m     [31m├ù[31m detects disk full, cleaner cycles, and deletions[39m[32m 72[2mms[22m[39m
+     [32mΓ£ô[39m shows disk alerts section[32m 60[2mms[22m[39m
+     [32mΓ£ô[39m shows cleaner cycle stats[32m 78[2mms[22m[39m
+     [32mΓ£ô[39m lists individual events with timestamps[32m 26[2mms[22m[39m
+     [32mΓ£ô[39m shows hourly bucket aggregation[32m 24[2mms[22m[39m
+     [32mΓ£ô[39m aggregates multi-hour data correctly[32m 27[2mms[22m[39m
+     [32mΓ£ô[39m returns clean message when no storage events[32m 49[2mms[22m[39m
+     [32mΓ£ô[39m returns message when no files found[32m 56[2mms[22m[39m
+     [32mΓ£ô[39m propagates warnings for unreadable files[32m 43[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/search-pattern.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 405[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/video-health.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 419[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/camera-analysis.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 453[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/access-control.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 500[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/network.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 610[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/db-health.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 731[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/alarms.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 713[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/misc-tools.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 574[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/auth-analysis.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 846[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/hw-analysis.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 884[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/interserver.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1015[2mms[22m[39m
+ [32mΓ£ô[39m tests/lib/log-reader.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 202[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/keyword-tools.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 314[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/summarize-health.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 216[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/correlate-timeline.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 208[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/service-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 182[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/search-http-requests.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 212[2mms[22m[39m
+ [32mΓ£ô[39m tests/lib/prefix-map.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32mΓ£ô[39m tests/lib/log-parser.test.ts [2m([22m[2m43 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32mΓ£ô[39m tests/lib/symphony-patterns.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32mΓ£ô[39m tests/lib/system-info-parser.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/permissions.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 136[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/ui-thread.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 109[2mms[22m[39m
+ [32mΓ£ô[39m tests/lib/config-parser.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/new-tools.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 1439[2mms[22m[39m
+ [32mΓ£ô[39m tests/lib/fingerprint.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32mΓ£ô[39m tests/tool-registry.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32mΓ£ô[39m tests/tools/connectivity.test.ts [2m([22m[2m63 tests[22m[2m)[22m[33m 1994[2mms[22m[39m
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\NodeJS/node.exe" "C:\Program Files\NodeJS/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m[1m[41m Failed Tests 1 
+[49m[22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m
+
+[41m[1m FAIL [22m[49m tests/tools/storage.test.ts[2m > [22mtoolStorage 
+ΓÇö summary mode[2m > [22mdetects disk full, cleaner cycles, and deletions
+[31m[1mAssertionError[22m: expected 'Storage Summary ΓÇö 3 events across 1 
+fΓÇª' to contain 'File deletions'[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- File deletions[39m
+[31m+ Storage Summary ΓÇö 3 events across 1 file(s)[39m
+[31m+[39m
+[31m+   ΓÜá Disk space warnings      1[39m
+[31m+     Cleaner runs started     2[39m
+[31m+[39m
+[31m+ Disk alerts (last 1):[39m
+[31m+   [10:00:02.000] CleanerService.Run: Disk D: FULL - free space below 
+threshold[39m
+[31m+[39m
+[31m+ Cleaner cycles: 2 started, 0 completed[39m
+
+[36m [2mΓ¥»[22m tests/tools/storage.test.ts:[2m18:20[22m[39m
+    [90m 16|[39m     
+[34mexpect[39m(result)[33m.[39m[34mtoContain[39m([32m"Disk space 
+warnings"[39m)[33m;[39m
+    [90m 17|[39m     
+[34mexpect[39m(result)[33m.[39m[34mtoContain[39m([32m"Cleaner 
+cycles"[39m)[33m;[39m
+    [90m 18|[39m     
+[34mexpect[39m(result)[33m.[39m[34mtoContain[39m([32m"File 
+deletions"[39m)[33m;[39m
+    [90m   |[39m                    [31m^[39m
+    [90m 19|[39m   })[33m;[39m
+    [90m 20|[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»Γ
+Ä»[1/1]ΓÄ»[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m29 passed[39m[22m[90m (30)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m431 passed[39m[22m[90m (432)[39m
+[2m   Start at [22m 19:32:30
+[2m   Duration [22m 3.06s[2m (transform 3.84s, setup 0ms, import 6.28s, tests 13.02s, environment 9ms)[22m
+

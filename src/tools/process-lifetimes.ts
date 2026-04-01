@@ -15,7 +15,7 @@
  * Log file rollover: 5 MB max per file (MAX_FILE_SIZE = 5000000).
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import { isSymphonyProcess } from "../lib/symphony-patterns.js";
 import * as path from "path";
 
@@ -82,18 +82,18 @@ export interface ProcessLifetimesArgs {
 /** Compute raw process lifetime records from sccp logs. */
 export async function computeProcessLifetimes(
   logDir: string | string[],
-  args: ProcessLifetimesArgs
+  args: ProcessLifetimesArgs,
+  warnings?: string[],
 ): Promise<{ lifetimes: ProcessLifetime[]; processCount: number }> {
   const symphonyOnly = args.symphonyOnly ?? true;
 
   const byProcess = new Map<string, Map<number, ProcessSnapshot[]>>();
   const paths = await resolveFileRefs(args.files, logDir);
+  const warn = warnings ?? [];
 
   for (const fullPath of paths) {
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warn);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -158,12 +158,13 @@ export async function toolGetProcessLifetimes(
 
   const paths = await resolveFileRefs(args.files, logDir);
   if (paths.length === 0) return "No sccp log files found.";
+  const warnings: string[] = [];
 
-  const { lifetimes, processCount: byProcessSize } = await computeProcessLifetimes(logDir, args);
+  const { lifetimes, processCount: byProcessSize } = await computeProcessLifetimes(logDir, args, warnings);
   const byProcess = { size: byProcessSize }; // keep reference count
 
   if (lifetimes.length === 0) {
-    return "No process records found. Make sure you are passing sccp-*.txt log files.";
+    return appendWarnings("No process records found. Make sure you are passing sccp-*.txt log files.", warnings);
   }
 
   // Compatibility shim — all subsequent code uses lifetimes directly
@@ -211,6 +212,7 @@ export async function toolGetProcessLifetimes(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }
 

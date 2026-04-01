@@ -1,4 +1,4 @@
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import type { LogEntry } from "../lib/log-parser.js";
 import * as path from "path";
 
@@ -75,21 +75,19 @@ export async function toolGetUiThreadActivity(
 
   // Collect entries from all files
   let allEntries: (LogEntry & { sourceFile: string })[] = [];
+  const warnings: string[] = [];
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    try {
-      const entries = await readLogEntries(fullPath);
-      for (const e of entries) {
-        if (!isInTimeWindow(e.line.timestamp, args.startTime, args.endTime)) continue;
-        allEntries.push({ ...e, sourceFile: fileRef });
-      }
-    } catch {
-      continue;
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
+    for (const e of entries) {
+      if (!isInTimeWindow(e.line.timestamp, args.startTime, args.endTime)) continue;
+      allEntries.push({ ...e, sourceFile: fileRef });
     }
   }
 
   if (allEntries.length === 0) {
-    return `No log entries found in specified files${args.startTime ? ` within time window ${args.startTime}–${args.endTime ?? "end"}` : ""}.`;
+    return appendWarnings(`No log entries found in specified files${args.startTime ? ` within time window ${args.startTime}–${args.endTime ?? "end"}` : ""}.`, warnings);
   }
 
   // Sort by timestampMs
@@ -184,5 +182,6 @@ export async function toolGetUiThreadActivity(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

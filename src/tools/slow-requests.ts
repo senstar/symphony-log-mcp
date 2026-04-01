@@ -5,7 +5,7 @@
  * in any Symphony log. Exported for use by the merged sym_http tool.
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
 import { parseTookMs } from "../lib/log-parser.js";
 import * as path from "path";
 
@@ -34,18 +34,16 @@ export async function findSlowRpcRequests(
   thresholdMs: number,
   startTime?: string,
   endTime?: string,
+  warnings?: string[],
 ): Promise<SlowRequest[]> {
   const slow: SlowRequest[] = [];
   const paths = await resolveFileRefs(files, logDir);
+  const warn = warnings ?? [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch {
-      continue;
-    }
+    const entries = await tryReadLogEntries(fullPath, warn);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, startTime, endTime)) continue;

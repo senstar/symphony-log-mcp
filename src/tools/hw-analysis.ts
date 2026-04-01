@@ -8,16 +8,16 @@
  *   - Device inventory from running configuration
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import * as path from "path";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
 
-const RE_ADVANTECH      = /Advantech|ADAM[-\s]?\d+|adam[-_]?device/i;
+const RE_ADVANTECH      = /\bAdvantech\b|\bADAM[-\s]?\d{4}\b|\badam[-_]?device\b/i;
 const RE_HW_CONNECT     = /(?:hardware|device|controller)\s+(?:connect|disconnect|timeout|not\s+respond)/i;
 const RE_SERIAL_PORT    = /(?:COM\d+|serial\s+port|RS-?232|RS-?485|Baud)/i;
 const RE_IO_MODULE      = /(?:IO\s+module|input\s+module|output\s+module|DIO|digital\s+(?:in|out)put)/i;
-const RE_DOOR_CTRL      = /(?:door\s+controller|access\s+controller|mercury|HID|Wiegand)/i;
+const RE_DOOR_CTRL      = /(?:door\s+controller|access\s+controller|\bMercury\b|\bHID\b|\bWiegand\b)/i;
 const RE_DEVICE_ERROR   = /(?:device|hardware).*(?:error|fail|exception|timeout|offline|unreachable)/i;
 const RE_ADAM_ERROR      = /(?:ReadCoil|ReadStatus|WriteCoil|WriteRegister|WriteSingleCoil).*(?:fail|error|timeout|exception)/i;
 const RE_IP_DEVICE       = /(?:device|module|controller)\s+(?:at\s+)?([\d.]+(?::\d+)?)/i;
@@ -52,13 +52,12 @@ export async function toolHw(
   if (paths.length === 0) return "No log files found. Try specifying files (e.g., 'is', 'ac', 'hm').";
 
   const events: HwEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, startTime, endTime)) continue;
@@ -124,19 +123,19 @@ export async function toolHw(
   }
 
   if (events.length === 0) {
-    return "No hardware-related events found" +
-      (deviceFilter ? ` matching '${deviceFilter}'` : "") + ".";
+    return appendWarnings("No hardware-related events found" +
+      (deviceFilter ? ` matching '${deviceFilter}'` : "") + ".", warnings);
   }
 
   switch (mode) {
     case "summary":
-      return formatHwSummary(events);
+      return appendWarnings(formatHwSummary(events), warnings);
     case "advantech":
-      return formatAdvantech(events, limit);
+      return appendWarnings(formatAdvantech(events, limit), warnings);
     case "devices":
-      return formatDevices(events, limit);
+      return appendWarnings(formatDevices(events, limit), warnings);
     case "errors":
-      return formatHwErrors(events, limit);
+      return appendWarnings(formatHwErrors(events, limit), warnings);
     default:
       return `Unknown mode '${mode}'. Use: summary, advantech, devices, errors`;
   }

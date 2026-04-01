@@ -1,4 +1,4 @@
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import { extractStackTrace, type LogEntry } from "../lib/log-parser.js";
 import { fingerprint } from "../lib/fingerprint.js";
 import * as path from "path";
@@ -23,21 +23,21 @@ export interface SearchErrorsArgs {
 /** Compute deduplicated error groups without formatting. */
 export async function computeErrorGroups(
   logDir: string | string[],
-  args: SearchErrorsArgs
+  args: SearchErrorsArgs,
+  warnings?: string[],
 ): Promise<{ groups: Map<string, ErrorGroup>; rawErrors: LogEntry[]; fileCount: number }> {
   const dedup = args.deduplicate ?? true;
   const groups = new Map<string, ErrorGroup>();
   const rawErrors: LogEntry[] = [];
   let fileCount = 0;
+  const warn = warnings ?? [];
 
   const paths = await resolveFileRefs(args.files, logDir);
   fileCount = paths.length;
 
   for (const fullPath of paths) {
-    let entries: LogEntry[];
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warn);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (entry.line.level !== "Error") continue;
@@ -77,11 +77,12 @@ export async function toolSearchErrors(
   const dedup = args.deduplicate ?? true;
   const includeStacks = args.includeStacks ?? true;
   const limit = args.limit ?? 100;
+  const warnings: string[] = [];
 
-  const { groups, rawErrors, fileCount } = await computeErrorGroups(logDir, args);
+  const { groups, rawErrors, fileCount } = await computeErrorGroups(logDir, args, warnings);
 
   if (!dedup) {
-    if (rawErrors.length === 0) return "No errors found.";
+    if (rawErrors.length === 0) return appendWarnings("No errors found.", warnings);
     const shown = rawErrors.slice(0, limit);
     const out: string[] = [
       `Found ${rawErrors.length} error entry(ies) across ${fileCount} file(s) (showing ${shown.length}):`,
@@ -94,12 +95,13 @@ export async function toolSearchErrors(
       }
       out.push("");
     }
+    if (warnings.length > 0) { out.push(""); out.push(...warnings); }
     return out.join("\n");
   }
 
   // Deduplicated output
   const sorted = [...groups.values()].sort((a, b) => b.count - a.count);
-  if (sorted.length === 0) return "No errors found.";
+  if (sorted.length === 0) return appendWarnings("No errors found.", warnings);
 
   const shown = sorted.slice(0, limit);
   const out: string[] = [
@@ -122,5 +124,6 @@ export async function toolSearchErrors(
     out.push("");
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

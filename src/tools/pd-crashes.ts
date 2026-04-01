@@ -16,7 +16,7 @@
  */
 
 import * as path from "path";
-import { resolveFileRefs, readRawLines } from "../lib/log-reader.js";
+import { resolveFileRefs, tryReadRawLines, appendWarnings } from "../lib/log-reader.js";
 
 interface PdFrame {
   address: string;
@@ -145,23 +145,20 @@ export async function toolGetPdCrashes(
 
   const allCrashes: PdCrash[] = [];
   const paths = await resolveFileRefs(args.files, logDir);
+  const warnings: string[] = [];
 
   if (paths.length === 0) return "No pd log files found.";
 
   for (const fullPath of paths) {
     const filename = path.basename(fullPath);
-    let lines: string[];
-    try {
-      lines = await readRawLines(fullPath);
-    } catch {
-      continue;
-    }
+    const lines = await tryReadRawLines(fullPath, warnings);
+    if (!lines) continue;
     const crashes = parsePdCrashes(lines, filename);
     allCrashes.push(...crashes);
   }
 
   if (allCrashes.length === 0) {
-    return "No crash records found. Make sure you are passing pd-*.txt log files.";
+    return appendWarnings("No crash records found. Make sure you are passing pd-*.txt log files.", warnings);
   }
 
   const shown = allCrashes.slice(0, limit);
@@ -211,5 +208,6 @@ export async function toolGetPdCrashes(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

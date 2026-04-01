@@ -22,7 +22,7 @@
  */
 
 import * as path from "path";
-import { resolveFileRefs, listLogFiles, isInTimeWindow, readRawLinesWithTimeFilter } from "../lib/log-reader.js";
+import { resolveFileRefs, listLogFiles, isInTimeWindow, tryReadRawLinesWithTimeFilter } from "../lib/log-reader.js";
 import { timestampToMs } from "../lib/log-parser.js";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -109,12 +109,12 @@ async function parseMoHops(
   fullPath: string,
   requestName: string,
   startTime?: string,
-  endTime?: string
+  endTime?: string,
+  warnings?: string[],
 ): Promise<MoHop[]> {
-  let lines: string[];
-  try {
-    lines = await readRawLinesWithTimeFilter(fullPath, startTime, endTime);
-  } catch { return []; }
+  const warn = warnings ?? [];
+  const lines = await tryReadRawLinesWithTimeFilter(fullPath, warn, startTime, endTime);
+  if (!lines) return [];
 
   const filename = path.basename(fullPath);
 
@@ -175,12 +175,12 @@ async function parseIsHops(
   requestName: string,
   seqNumbers: Set<number>,
   startTime?: string,
-  endTime?: string
+  endTime?: string,
+  warnings?: string[],
 ): Promise<IsHop[]> {
-  let lines: string[];
-  try {
-    lines = await readRawLinesWithTimeFilter(fullPath, startTime, endTime);
-  } catch { return []; }
+  const warn = warnings ?? [];
+  const lines = await tryReadRawLinesWithTimeFilter(fullPath, warn, startTime, endTime);
+  if (!lines) return [];
 
   const filename = path.basename(fullPath);
 
@@ -297,8 +297,9 @@ export async function toolTraceMbRequest(
 
   // ── Step 1: collect Mo hops ────────────────────────────────────────────────
   const allMoHops: MoHop[] = [];
+  const traceWarnings: string[] = [];
   for (const fp of moFiles) {
-    const hops = await parseMoHops(fp, requestName, startTime, endTime);
+    const hops = await parseMoHops(fp, requestName, startTime, endTime, traceWarnings);
     allMoHops.push(...hops);
   }
 
@@ -331,7 +332,7 @@ export async function toolTraceMbRequest(
 
   const allIsHops: IsHop[] = [];
   for (const fp of isFiles) {
-    const hops = await parseIsHops(fp, requestName, seqSet, isStart, isEnd);
+    const hops = await parseIsHops(fp, requestName, seqSet, isStart, isEnd, traceWarnings);
     allIsHops.push(...hops);
   }
 
@@ -443,5 +444,6 @@ export async function toolTraceMbRequest(
     out.push(`   min=${min}ms  avg=${avg}ms  max=${max}ms`);
   }
 
+  if (traceWarnings.length > 0) { out.push(""); out.push(...traceWarnings); }
   return out.join("\n");
 }

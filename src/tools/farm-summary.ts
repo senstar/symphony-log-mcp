@@ -12,7 +12,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { computeHealthSummary } from "./summarize-health.js";
 import { computeErrorGroups } from "./search-errors.js";
-import { listLogFiles, readLogEntries, resolveFileRefs } from "../lib/log-reader.js";
+import { listLogFiles, tryReadLogEntries, resolveFileRefs } from "../lib/log-reader.js";
 import { summarizeProcessNames } from "./triage.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ interface ServerSummary {
   errors: number;
   uniquePatterns: number;
   topError: string;
+  topErrors: { count: number; message: string }[];
   crashLoops: number;
   restarts: number;
   processCount: number;
@@ -97,6 +98,7 @@ async function gatherServerSummaries(parentDir: string): Promise<ServerSummary[]
     let errors = 0;
     let uniquePatterns = 0;
     let topError = "";
+    let topErrors: { count: number; message: string }[] = [];
     let crashLoops = 0;
     let restarts = 0;
     let processCount = 0;
@@ -110,6 +112,7 @@ async function gatherServerSummaries(parentDir: string): Promise<ServerSummary[]
       errors = h.errorCount;
       uniquePatterns = h.uniquePatterns;
       topError = h.topErrors[0]?.message?.slice(0, 80) ?? "";
+      topErrors = h.topErrors.slice(0, 5).map(e => ({ count: e.count, message: e.message }));
 
       if (crashLoops > 0 || restarts >= 5) health = "CRITICAL";
       else if (restarts > 0 || errors > 50) health = "DEGRADED";
@@ -125,6 +128,7 @@ async function gatherServerSummaries(parentDir: string): Promise<ServerSummary[]
       errors,
       uniquePatterns,
       topError,
+      topErrors,
       crashLoops,
       restarts,
       processCount,
@@ -143,6 +147,110 @@ async function gatherServerSummaries(parentDir: string): Promise<ServerSummary[]
 // Formatters
 // ─────────────────────────────────────────────────────────────────────────────
 
+function buildFarmAggregation(summaries: ServerSummary[]): string[] {
+  const out: string[] = [];
+  const total = summaries.length;
+
+  // --- Farm-level health assessment ---
+  const critical = summaries.filter(s => s.health === "CRITICAL");
+  const degraded = summaries.filter(s => s.health === "DEGRADED");
+  const healthy = summaries.filter(s => s.health === "HEALTHY");
+  const errored = summaries.filter(s => s.health === "ERROR");
+
+  let farmHealth: string;
+  const issues: string[] = [];
+
+  if (critical.length > 0) {
+    farmHealth = "CRITICAL";
+    issues.push(`${critical.length}/${total} servers critical`);
+  } else if (degraded.length > 0 || errored.length > 0) {
+    farmHealth = "WARNING";
+    if (degraded.length > 0) issues.push(`${degraded.length}/${total} servers degraded`);
+    if (errored.length > 0) issues.push(`${errored.length}/${total} servers errored`);
+  } else {
+    farmHealth = "HEALTHY";
+  }
+
+  const crashLoopServers = summaries.filter(s => s.crashLoops > 0);
+  if (crashLoopServers.length > 0) {
+    issues.push(`crash loops on ${crashLoopServers.length} server(s)`);
+  }
+  const highRestartServers = summaries.filter(s => s.restarts >= 5);
+  if (highRestartServers.length > 0) {
+    issues.push(`high restarts on ${highRestartServers.length} server(s)`);
+  }
+
+  const statusLine = issues.length > 0
+    ? `FARM HEALTH: ${farmHealth} — ${issues.join(", ")}`
+    : `FARM HEALTH: ${farmHealth} — all ${total} servers healthy`;
+
+  out.push(statusLine);
+  out.push("");
+
+  // --- Aggregated metrics ---
+  const totalErrors = summaries.reduce((s, x) => s + x.errors, 0);
+  const avgErrors = total > 0 ? Math.round(totalErrors / total) : 0;
+  const minErrors = Math.min(...summaries.map(s => s.errors));
+  const maxErrors = Math.max(...summaries.map(s => s.errors));
+  const totalRestarts = summaries.reduce((s, x) => s + x.restarts, 0);
+  const totalCrashLoops = summaries.reduce((s, x) => s + x.crashLoops, 0);
+
+  out.push("Aggregated Metrics:");
+  out.push(`  Errors:      total ${totalErrors}  avg ${avgErrors}  min ${minErrors}  max ${maxErrors}`);
+  out.push(`  Restarts:    ${totalRestarts} total across ${summaries.filter(s => s.restarts > 0).length}/${total} servers`);
+  if (totalCrashLoops > 0) {
+    out.push(`  Crash Loops: ${totalCrashLoops} total across ${crashLoopServers.length}/${total} servers`);
+  }
+  out.push("");
+
+  // --- Cross-server pattern detection ---
+  const errorPatternMap = new Map<string, string[]>();
+  for (const s of summaries) {
+    for (const err of s.topErrors) {
+      const key = err.message.slice(0, 60).trim();
+      if (!key) continue;
+      const servers = errorPatternMap.get(key) ?? [];
+      if (!servers.includes(s.name)) servers.push(s.name);
+      errorPatternMap.set(key, servers);
+    }
+  }
+
+  const crossServerPatterns = [...errorPatternMap.entries()]
+    .filter(([, servers]) => servers.length >= 2)
+    .sort((a, b) => b[1].length - a[1].length);
+
+  const issueGroups: { label: string; servers: string[] }[] = [];
+  if (crashLoopServers.length > 0) {
+    issueGroups.push({ label: "Crash loops", servers: crashLoopServers.map(s => s.name) });
+  }
+  if (highRestartServers.length > 0) {
+    issueGroups.push({ label: "High restarts (≥5)", servers: highRestartServers.map(s => s.name) });
+  }
+  const highErrorServers = summaries.filter(s => s.errors > 50);
+  if (highErrorServers.length > 0) {
+    issueGroups.push({ label: "High error count (>50)", servers: highErrorServers.map(s => s.name) });
+  }
+
+  if (crossServerPatterns.length > 0 || issueGroups.length > 0) {
+    out.push("Cross-Server Patterns:");
+    out.push("─".repeat(80));
+    for (const { label, servers } of issueGroups) {
+      out.push(`  ${label}: ${servers.length}/${total} servers — ${servers.join(", ")}`);
+    }
+    if (crossServerPatterns.length > 0) {
+      if (issueGroups.length > 0) out.push("");
+      out.push("  Common errors across servers:");
+      for (const [pattern, servers] of crossServerPatterns.slice(0, 5)) {
+        out.push(`    ${servers.length}/${total} servers: ${pattern}`);
+        out.push(`      Affected: ${servers.join(", ")}`);
+      }
+    }
+    out.push("");
+  }
+
+  return out;
+}
+
 function formatDashboard(summaries: ServerSummary[]): string {
   const out: string[] = [];
   const total = summaries.length;
@@ -157,6 +265,10 @@ function formatDashboard(summaries: ServerSummary[]): string {
   out.push("  FARM DASHBOARD");
   out.push("═".repeat(80));
   out.push("");
+
+  // Farm-wide aggregation (overview first)
+  out.push(...buildFarmAggregation(summaries));
+
   out.push(`  Servers: ${total}  |  Cameras: ${totalCameras}  |  Total Errors: ${totalErrors}`);
   out.push(`  Health:  ${critical} CRITICAL  ${degraded} DEGRADED  ${healthy} HEALTHY`);
   if (totalCrashLoops > 0) out.push(`  Crash-Loops: ${totalCrashLoops} process(es) across farm`);
@@ -308,8 +420,8 @@ async function formatConnectivity(summaries: ServerSummary[]): Promise<string> {
     try {
       const paths = await resolveFileRefs(["is"], s.logDir);
       for (const fullPath of paths) {
-        let entries;
-        try { entries = await readLogEntries(fullPath); } catch { continue; }
+        const entries = await tryReadLogEntries(fullPath, []);
+        if (!entries) continue;
 
         for (const entry of entries) {
           const msg = entry.line.message;

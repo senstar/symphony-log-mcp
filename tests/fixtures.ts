@@ -203,7 +203,7 @@ export const AUTH_LOG_CONTENT = [
   '10:00:02.000    1234 <Error   > Security\tSecureScope.Establish\tEstablishSecureScope Failed for user viewer@DOMAIN',
   '10:00:03.000    1234 <Error   > Security\tSessionManager.Create\tCreateSession Failed: token expired for user operator@DOMAIN',
   '10:00:04.000    1234 <BasicInf> Security\tAuthManager.Logout\tLogout user operator@DOMAIN session closed',
-  '10:00:05.000    1234 <Error   > Security\tAuthManager.Login\tUser admin not authenticated by Active Directory: bad password',
+  '10:00:05.000    1234 <Error   > Security\tAuthManager.Login\tUser admin not authenticated by Active Directory: account locked',
   '10:00:06.000    1234 <Error   > Security\tCredManager.Validate\tauthentication failed for credential token expired',
 ].join('\n');
 

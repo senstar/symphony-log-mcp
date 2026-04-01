@@ -1,4 +1,4 @@
-import { readLogEntries, resolveFileRefs } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, appendWarnings } from "../lib/log-reader.js";
 import { extractStackTrace, isNativeStackFrame } from "../lib/log-parser.js";
 import * as path from "path";
 
@@ -35,15 +35,12 @@ export async function toolGetStackTraces(
 
   const stacks: FoundStack[] = [];
   const paths = await resolveFileRefs(args.files, logDir);
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch (e) {
-      continue;
-    }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (entry.continuationLines.length === 0) continue;
@@ -76,7 +73,7 @@ export async function toolGetStackTraces(
   }
 
   if (stacks.length === 0) {
-    return "No stack traces found" + (exFilter ? ` matching '${exFilter}'` : "") + ".";
+    return appendWarnings("No stack traces found" + (exFilter ? ` matching '${exFilter}'` : "") + ".", warnings);
   }
 
   const shown = stacks.slice(0, limit);
@@ -112,5 +109,6 @@ export async function toolGetStackTraces(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

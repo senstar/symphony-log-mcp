@@ -1,4 +1,4 @@
-import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import type { LogEntry } from "../lib/log-parser.js";
 import * as path from "path";
 
@@ -44,16 +44,14 @@ export async function toolSearchPattern(
   const results: string[] = [];
   let totalMatches = 0;
   const paths = await resolveFileRefs(args.files, logDir);
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
     let entries: LogEntry[];
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch (e) {
-      results.push(`Error reading ${fileRef}: ${e}`);
-      continue;
-    }
+    const readResult = await tryReadLogEntries(fullPath, warnings);
+    if (!readResult) continue;
+    entries = readResult;
 
     const fileMatches: Array<{ idx: number; entry: LogEntry }> = [];
 
@@ -102,9 +100,9 @@ export async function toolSearchPattern(
     }
   }
 
-  if (totalMatches === 0) return `No matches found for: ${args.pattern}`;
+  if (totalMatches === 0) return appendWarnings(`No matches found for: ${args.pattern}`, warnings);
 
-  return [`Total matches: ${totalMatches}`, ...results].join("\n");
+  return appendWarnings([`Total matches: ${totalMatches}`, ...results].join("\n"), warnings);
 }
 
 // ── Count mode ──────────────────────────────────────────────────────────────
@@ -133,13 +131,12 @@ export async function toolSearchCount(
   const rows: Array<{ file: string; count: number; lines: number; first: string; last: string }> = [];
   let grandTotal = 0;
   let grandLines = 0;
+  const countWarnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries: LogEntry[];
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch {
+    const entries = await tryReadLogEntries(fullPath, countWarnings);
+    if (!entries) {
       rows.push({ file: fileRef, count: -1, lines: 0, first: "", last: "" });
       continue;
     }
@@ -188,7 +185,7 @@ export async function toolSearchCount(
     }
   }
 
-  return lines.join("\n");
+  return appendWarnings(lines.join("\n"), countWarnings);
 }
 
 // ── Assert-absent mode ──────────────────────────────────────────────────────
@@ -219,14 +216,13 @@ export async function toolSearchAssertAbsent(
   let totalLines = 0;
   let totalFiles = 0;
   const unexpected: Array<{ file: string; timestamp: string; message: string }> = [];
+  const absentWarnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
     totalFiles++;
-    let entries: LogEntry[];
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, absentWarnings);
+    if (!entries) continue;
 
     totalLines += entries.length;
 
@@ -243,12 +239,13 @@ export async function toolSearchAssertAbsent(
   }
 
   if (unexpected.length === 0) {
-    return (
+    return appendWarnings(
       `CONFIRMED ABSENT: Pattern '${args.pattern}' was NOT found.\n` +
       `Scanned: ${totalFiles} file(s), ${totalLines} log entries.` +
       (args.startTime || args.endTime
         ? `\nTime window: ${args.startTime ?? "start"} → ${args.endTime ?? "end"}`
-        : "")
+        : ""),
+      absentWarnings
     );
   }
 
@@ -260,5 +257,5 @@ export async function toolSearchAssertAbsent(
   for (const u of unexpected) {
     lines.push(`  ${u.file}  ${u.timestamp}  ${u.message.slice(0, 120)}`);
   }
-  return lines.join("\n");
+  return appendWarnings(lines.join("\n"), absentWarnings);
 }

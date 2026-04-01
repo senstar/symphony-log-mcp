@@ -15,7 +15,7 @@
  */
 
 import * as path from "path";
-import { resolveFileRefs, readRawLines, isInTimeWindow } from "../lib/log-reader.js";
+import { resolveFileRefs, tryReadRawLines, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
 import { timestampToMs } from "../lib/log-parser.js";
 import { findSlowRpcRequests, formatSlowRequests, type SlowRequest } from "./slow-requests.js";
 
@@ -79,12 +79,12 @@ function matchesStatusFilter(status: number | null, filters: (number | string)[]
 async function parseHttpRequests(
   fullPath: string,
   startTime?: string,
-  endTime?: string
+  endTime?: string,
+  warnings?: string[],
 ): Promise<HttpRequest[]> {
-  let lines: string[];
-  try {
-    lines = await readRawLines(fullPath);
-  } catch { return []; }
+  const warn = warnings ?? [];
+  const lines = await tryReadRawLines(fullPath, warn);
+  if (!lines) return [];
 
   const filename = path.basename(fullPath);
 
@@ -251,13 +251,14 @@ export async function toolSearchHttpRequests(
   if (paths.length === 0) return `No log files found for: ${args.files.join(", ")}`;
 
   const all: HttpRequest[] = [];
+  const httpWarnings: string[] = [];
   for (const fp of paths) {
-    const reqs = await parseHttpRequests(fp, startTime, endTime);
+    const reqs = await parseHttpRequests(fp, startTime, endTime, httpWarnings);
     all.push(...reqs);
   }
 
   if (all.length === 0) {
-    return `No HTTP requests found in specified files.`;
+    return appendWarnings(`No HTTP requests found in specified files.`, httpWarnings);
   }
 
   // Filter
@@ -518,6 +519,7 @@ export async function toolSearchHttpRequests(
     out.push(`\nStats: avg=${avg}ms  max=${max}ms  errors=${errors}/${shown.length}`);
   }
 
+  if (httpWarnings.length > 0) { out.push(""); out.push(...httpWarnings); }
   return out.join("\n");
 }
 

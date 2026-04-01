@@ -8,7 +8,7 @@
  *   - Build a connectivity timeline across services
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import { fingerprint } from "../lib/fingerprint.js";
 import * as path from "path";
 
@@ -21,8 +21,25 @@ const RE_RETRY        = /(?:retry|reconnect|re-connect|attempt(?:ing)?\s+(?:conn
 const RE_REFUSED      = /(?:connection\s+refused|actively\s+refused|no\s+connection\s+could\s+be\s+made|ECONNREFUSED)/i;
 const RE_DNS          = /(?:DNS|name\s+resolution|could\s+not\s+resolve|host\s+not\s+found|ENOTFOUND)/i;
 
-// IP:port extraction
-const RE_IP_PORT      = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?)/;
+// IP:port extraction — loose capture, validated programmatically
+const RE_IP_PORT_CANDIDATE = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::(\d{1,5}))?\b/;
+
+function extractIpPort(msg: string): string | undefined {
+  const m = RE_IP_PORT_CANDIDATE.exec(msg);
+  if (!m) return undefined;
+
+  // Validate each octet is 0–255
+  const octets = m[1].split(".").map(Number);
+  if (octets.some(o => o > 255)) return undefined;
+
+  // Validate port is 1–65535 if present
+  if (m[2]) {
+    const port = Number(m[2]);
+    if (port < 1 || port > 65535) return undefined;
+  }
+
+  return m[2] ? `${m[1]}:${m[2]}` : m[1];
+}
 
 interface NetworkEvent {
   timestamp: string;
@@ -59,13 +76,12 @@ export async function toolNetwork(
   if (paths.length === 0) return `No log files found in the log directory.`;
 
   const events: NetworkEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -81,8 +97,7 @@ export async function toolNetwork(
 
       if (!category) continue;
 
-      const ipMatch = RE_IP_PORT.exec(msg);
-      const target = ipMatch?.[1] ?? "";
+      const target = extractIpPort(msg) ?? "";
 
       if (targetFilter && !target.includes(targetFilter) && !msg.toLowerCase().includes(targetFilter)) continue;
 
@@ -100,7 +115,7 @@ export async function toolNetwork(
   }
 
   if (events.length === 0) {
-    return `No network events found in ${paths.length} file(s).`;
+    return appendWarnings(`No network events found in ${paths.length} file(s).`, warnings);
   }
 
   events.sort((a, b) => a.timestampMs - b.timestampMs);
@@ -197,5 +212,6 @@ export async function toolNetwork(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

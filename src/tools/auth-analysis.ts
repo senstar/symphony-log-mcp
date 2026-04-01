@@ -8,7 +8,7 @@
  *   - Session creation / renewal issues
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import { fingerprint } from "../lib/fingerprint.js";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -58,13 +58,12 @@ export async function toolAuth(
   if (paths.length === 0) return "No log files found. Try specifying files (e.g., 'is').";
 
   const events: AuthEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, startTime, endTime)) continue;
@@ -101,16 +100,16 @@ export async function toolAuth(
   }
 
   if (events.length === 0) {
-    return "No authentication events found" + (userFilter ? ` for user '${userFilter}'` : "") + ".";
+    return appendWarnings("No authentication events found" + (userFilter ? ` for user '${userFilter}'` : "") + ".", warnings);
   }
 
   switch (mode) {
     case "summary":
-      return formatSummary(events);
+      return appendWarnings(formatSummary(events), warnings);
     case "failures":
-      return formatFailures(events, limit);
+      return appendWarnings(formatFailures(events, limit), warnings);
     case "sessions":
-      return formatSessions(events, limit);
+      return appendWarnings(formatSessions(events, limit), warnings);
     default:
       return `Unknown mode '${mode}'. Use: summary, failures, sessions`;
   }

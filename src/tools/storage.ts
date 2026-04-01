@@ -8,7 +8,7 @@
  *   - Deletion rate and cleanup patterns
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import * as path from "path";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
@@ -16,7 +16,7 @@ import * as path from "path";
 const RE_DISK_WARN    = /(?:disk\s+space\s+(?:low|warning|critical)|low\s+disk|free\s+(?:space|disk).*(?:below|less\s+than|under))/i;
 const RE_DISK_FULL    = /(?:disk\s+(?:full|out\s+of\s+space)|no\s+(?:space|disk)\s+left|storage\s+full|insufficient\s+(?:disk|storage))/i;
 const RE_RETENTION    = /(?:retention|expir|purg|age-off|cleanup)/i;
-const RE_DELETE       = /(?:delet(?:e|ed|ing)\s+(?:file|video|recording|footage|data)|remov(?:e|ed|ing)\s+(?:file|video|data))/i;
+export const RE_DELETE = /(?:delet(?:e|ed|ing)\s+(?:\d+\s+)?(?:file|video|recording|footage|data)|remov(?:e|ed|ing)\s+(?:\d+\s+)?(?:file|video|data))/i;
 const RE_CLEANER_RUN  = /(?:cleaner\s+(?:start|run|cycle|pass|scan)|cleanup\s+(?:start|run|cycle))/i;
 const RE_CLEANER_DONE = /(?:cleaner\s+(?:finish|complete|done|end)|cleanup\s+(?:finish|complete|done|end))/i;
 const RE_SPACE_INFO   = /(?:free[\s:]+\d|available[\s:]+\d|capacity[\s:]+\d|used[\s:]+\d|total[\s:]+\d)/i;
@@ -53,13 +53,12 @@ export async function toolStorage(
   if (paths.length === 0) return `No storage log files found. Try specifying files explicitly (sccl* prefix).`;
 
   const events: StorageEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -90,7 +89,7 @@ export async function toolStorage(
   }
 
   if (events.length === 0) {
-    return `No storage events found in ${paths.length} file(s).`;
+    return appendWarnings(`No storage events found in ${paths.length} file(s).`, warnings);
   }
 
   events.sort((a, b) => a.timestampMs - b.timestampMs);
@@ -177,5 +176,6 @@ export async function toolStorage(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

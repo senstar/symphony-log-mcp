@@ -9,13 +9,14 @@
  *   - Recording gaps
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import * as path from "path";
 
 // ── Patterns ────────────────────────────────────────────────────────────────
 
-const RE_CAM_CONNECT    = /(?:connected|connection\s+(?:established|opened|restored))/i;
-const RE_CAM_DISCONNECT = /(?:disconnected|connection\s+(?:lost|closed|failed|dropped|reset))/i;
+const RE_CAM_DISCONNECT = /(?:\bdisconnect(?:ed|ing)?\b|connection\s+(?:lost|closed|failed|dropped|reset))/i;
+const RE_CAM_RECONNECT  = /(?:\breconnect(?:ed|ing)?\b|connection\s+(?:restored|re-?established|recovered))/i;
+const RE_CAM_CONNECT    = /(?:\bconnect(?:ed|ing)?\b|connection\s+(?:established|opened))/i;
 const RE_FRAME_DROP     = /(?:frame\s*drop|dropped?\s+frame|buffer\s+(?:overflow|full|overrun))/i;
 const RE_CODEC_ERROR    = /(?:codec\s+error|decode\s+(?:error|fail)|encoder\s+(?:error|fail)|h\.?26[45]\s+error|jpeg\s+error)/i;
 const RE_STORAGE_FAIL   = /(?:storage\s+(?:write|error|fail)|write\s+(?:error|fail)|disk\s+(?:full|error))/i;
@@ -28,7 +29,7 @@ interface VideoEvent {
   timestamp: string;
   timestampMs: number;
   level: string;
-  category: "connection" | "disconnect" | "frame_drop" | "codec_error" | "storage_fail" | "recording_gap" | "stream_start" | "stream_stop";
+  category: "connection" | "disconnect" | "reconnect" | "frame_drop" | "codec_error" | "storage_fail" | "recording_gap" | "stream_start" | "stream_stop";
   message: string;
   source: string;
   file: string;
@@ -55,21 +56,21 @@ export async function toolVideoHealth(
   if (paths.length === 0) return `No video health log files found. Try specifying files explicitly (cs*, vcd*, hs* prefixes).`;
 
   const events: VideoEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
       const msg = entry.line.message;
 
       let category: VideoEvent["category"] | null = null;
-      if (RE_CAM_DISCONNECT.test(msg))  category = "disconnect";
-      else if (RE_CAM_CONNECT.test(msg)) category = "connection";
+      if (RE_CAM_DISCONNECT.test(msg))       category = "disconnect";
+      else if (RE_CAM_RECONNECT.test(msg))   category = "reconnect";
+      else if (RE_CAM_CONNECT.test(msg))     category = "connection";
       else if (RE_FRAME_DROP.test(msg))  category = "frame_drop";
       else if (RE_CODEC_ERROR.test(msg)) category = "codec_error";
       else if (RE_STORAGE_FAIL.test(msg)) category = "storage_fail";
@@ -92,7 +93,7 @@ export async function toolVideoHealth(
   }
 
   if (events.length === 0) {
-    return `No video pipeline events found in ${paths.length} file(s).`;
+    return appendWarnings(`No video pipeline events found in ${paths.length} file(s).`, warnings);
   }
 
   events.sort((a, b) => a.timestampMs - b.timestampMs);
@@ -109,6 +110,7 @@ export async function toolVideoHealth(
     const categoryLabels: Record<string, string> = {
       connection: "Camera connects",
       disconnect: "Camera disconnects",
+      reconnect: "Camera reconnects",
       frame_drop: "Frame drops",
       codec_error: "Codec errors",
       storage_fail: "Storage failures",
@@ -121,7 +123,7 @@ export async function toolVideoHealth(
       const count = byCat.get(cat) ?? 0;
       if (count > 0) {
         const indicator = (cat === "disconnect" || cat === "frame_drop" || cat === "codec_error" || cat === "storage_fail" || cat === "recording_gap")
-          ? "⚠" : " ";
+          ? "⚠" : (cat === "reconnect" ? "↻" : " ");
         out.push(`  ${indicator} ${label.padEnd(22)} ${count}`);
       }
     }
@@ -168,5 +170,6 @@ export async function toolVideoHealth(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

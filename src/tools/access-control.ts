@@ -8,7 +8,7 @@
  *   - Connection lifecycle with external AC systems
  */
 
-import { readLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, listLogFiles, appendWarnings } from "../lib/log-reader.js";
 import { fingerprint } from "../lib/fingerprint.js";
 import * as path from "path";
 
@@ -53,13 +53,12 @@ export async function toolAccessControl(
   if (paths.length === 0) return `No access control log files found. Try specifying files explicitly (ac, aacl, lacl, ga prefixes).`;
 
   const events: AccessControlEvent[] = [];
+  const warnings: string[] = [];
 
   for (const fullPath of paths) {
     const fileRef = path.basename(fullPath);
-    let entries;
-    try {
-      entries = await readLogEntries(fullPath);
-    } catch { continue; }
+    const entries = await tryReadLogEntries(fullPath, warnings);
+    if (!entries) continue;
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -89,7 +88,7 @@ export async function toolAccessControl(
   }
 
   if (events.length === 0) {
-    return `No access control events found in ${paths.length} file(s).`;
+    return appendWarnings(`No access control events found in ${paths.length} file(s).`, warnings);
   }
 
   events.sort((a, b) => a.timestampMs - b.timestampMs);
@@ -187,5 +186,6 @@ export async function toolAccessControl(
     }
   }
 
+  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }

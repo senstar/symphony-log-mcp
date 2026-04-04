@@ -206,12 +206,14 @@ export function parseLogLine(raw: string, lineNumber: number): LogLine | null {
 
 /** Parse raw text lines into LogEntry objects (line + continuation lines).
  *  Detects midnight rollover: if a timestamp jumps backward by >20 hours,
- *  subsequent entries get a +24h offset on timestampMs so sorting stays correct. */
-export function parseLogEntries(rawLines: string[]): LogEntry[] {
+ *  subsequent entries get a +24h offset on timestampMs so sorting stays correct.
+ *  The returned array has a `parseFailures` property counting lines that could not be parsed. */
+export function parseLogEntries(rawLines: string[]): LogEntry[] & { parseFailures: number } {
   const entries: LogEntry[] = [];
   let currentEntry: LogEntry | null = null;
   let dayOffset = 0;
   let prevMs = -1;
+  let parseFailures = 0;
 
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i];
@@ -247,12 +249,16 @@ export function parseLogEntries(rawLines: string[]): LogEntry[] {
       if (currentEntry) {
         currentEntry.continuationLines.push(raw);
         currentEntry.fullText += "\n" + raw;
+      } else if (raw.trim().length > 0) {
+        parseFailures++;
       }
     }
   }
 
   if (currentEntry) entries.push(currentEntry);
-  return entries;
+  const result = entries as LogEntry[] & { parseFailures: number };
+  result.parseFailures = parseFailures;
+  return result;
 }
 
 /** Extract a stack trace from an entry's continuation lines */

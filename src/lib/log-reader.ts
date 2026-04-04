@@ -109,16 +109,30 @@ export async function listLogFiles(
   return allFiles;
 }
 
+const MAX_LINES_LIMIT = 10_000;
+
 /** Read raw lines from a log file, with optional BOM stripping */
 export async function readRawLines(
   fullPath: string,
   maxLines?: number
 ): Promise<string[]> {
+  if (maxLines !== undefined) {
+    maxLines = Math.min(maxLines, MAX_LINES_LIMIT);
+  } else {
+    maxLines = MAX_LINES_LIMIT;
+  }
   let content = await fs.readFile(fullPath, "utf8");
   if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
   const lines = content.split(/\r?\n/);
-  if (maxLines !== undefined) return lines.slice(0, maxLines);
-  return lines;
+  return lines.slice(0, maxLines);
+}
+
+/** Validate HH:MM:SS time format. Throws on invalid format. */
+export function validateTimeFormat(time: string | undefined, paramName: string): void {
+  if (time === undefined) return;
+  if (!/^\d{2}:\d{2}:\d{2}$/.test(time)) {
+    throw new Error(`Invalid ${paramName}: "${time}" — expected HH:MM:SS format (e.g., "14:30:00")`);
+  }
 }
 
 /**
@@ -132,6 +146,8 @@ export async function readRawLinesWithTimeFilter(
   startTime?: string,
   endTime?: string,
 ): Promise<string[]> {
+  validateTimeFormat(startTime, "startTime");
+  validateTimeFormat(endTime, "endTime");
   const allLines = await readRawLines(fullPath);
   if (!startTime && !endTime) return allLines;
 

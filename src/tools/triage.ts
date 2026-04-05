@@ -11,6 +11,8 @@ import { toolGetServiceLifecycle } from "./service-lifecycle.js";
 import { toolEventLog } from "./event-log.js";
 import { listLogFiles, readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
 import type { BugReport } from "../lib/bug-report.js";
+import { triageCache } from "../lib/triage-cache.js";
+import * as fs from "fs";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -440,6 +442,17 @@ export async function toolTriage(
   }
 ): Promise<string> {
   let { sccpFiles, errorFiles, lifecycleFiles, startTime, endTime } = args;
+
+  // ── Check triage cache ───────────────────────────────────────────────────
+  const cacheKey = Array.isArray(logDir) ? logDir.join("|") : logDir;
+  let cacheMtime = 0;
+  try {
+    const dir = Array.isArray(logDir) ? logDir[0] : logDir;
+    cacheMtime = fs.statSync(dir).mtimeMs;
+  } catch { /* ignore — will miss cache */ }
+
+  const cached = triageCache.get(cacheKey, cacheMtime);
+  if (cached) return cached;
 
   // ── Auto-discover files if not provided ──────────────────────────────────
   if (!sccpFiles) {
@@ -967,5 +980,7 @@ export async function toolTriage(
 
   out.push(bar);
 
-  return out.join("\n");
+  const result = out.join("\n");
+  triageCache.set(cacheKey, cacheMtime, result);
+  return result;
 }

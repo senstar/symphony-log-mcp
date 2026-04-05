@@ -82,7 +82,7 @@ describe("server", () => {
   it("ListResourcesRequestSchema handler returns domain-knowledge resource", async () => {
     createServer();
     const result = await callHandler(ListResourcesRequestSchema, {});
-    expect(result.resources).toHaveLength(1);
+    expect(result.resources).toHaveLength(2);
     expect(result.resources[0].uri).toBe("symphony://domain-knowledge");
     expect(result.resources[0].name).toBe("Symphony VMS Domain Knowledge");
   });
@@ -197,5 +197,48 @@ describe("server", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("something broke");
+  });
+
+  // ---- 13. ListResourcesRequestSchema includes log-prefixes resource ----
+  it("ListResourcesRequestSchema includes log-prefixes resource", async () => {
+    createServer();
+    const result = await callHandler(ListResourcesRequestSchema, {});
+    const prefixResource = result.resources.find(
+      (r: any) => r.uri === "symphony://log-prefixes"
+    );
+    expect(prefixResource).toBeDefined();
+    expect(prefixResource.name).toBe("Symphony Log File Prefixes");
+    expect(prefixResource.mimeType).toBe("application/json");
+  });
+
+  // ---- 14. ReadResourceRequestSchema for log-prefixes returns prefix data ----
+  it("ReadResourceRequestSchema returns prefix data for symphony://log-prefixes", async () => {
+    createServer();
+    const result = await callHandler(ReadResourceRequestSchema, {
+      uri: "symphony://log-prefixes",
+    });
+    expect(result.contents).toHaveLength(1);
+    expect(result.contents[0].uri).toBe("symphony://log-prefixes");
+    expect(result.contents[0].mimeType).toBe("application/json");
+    const data = JSON.parse(result.contents[0].text);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBeGreaterThan(0);
+    // Each entry should have prefix, description, category, side
+    expect(data[0]).toHaveProperty("prefix");
+    expect(data[0]).toHaveProperty("description");
+    expect(data[0]).toHaveProperty("category");
+    expect(data[0]).toHaveProperty("side");
+  });
+
+  // ---- 15. setLogDir clears triage cache ----
+  it("setLogDir clears the triage cache", async () => {
+    const { triageCache } = await import("../src/lib/triage-cache.js");
+    triageCache.set("/old/dir", 1000, "cached report");
+    expect(triageCache.size).toBe(1);
+
+    setLogDir("/new/dir");
+
+    expect(triageCache.size).toBe(0);
+    expect(triageCache.get("/old/dir", 1000)).toBeNull();
   });
 });

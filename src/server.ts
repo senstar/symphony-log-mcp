@@ -12,6 +12,8 @@ import { DOMAIN_KNOWLEDGE } from "./lib/domain-knowledge.js";
 import { TOOLS } from "./tool-registry.js";
 import { dispatchToolCall } from "./tool-dispatch.js";
 import type { LogContext } from "./types.js";
+import { listKnownPrefixes } from "./lib/prefix-map.js";
+import { triageCache } from "./lib/triage-cache.js";
 
 import { createRequire } from "module";
 import * as fs from "fs";
@@ -148,6 +150,7 @@ async function getLogContext(overrideDir?: string): Promise<LogContext> {
 export function setLogDir(newDir: string): void {
   _currentLogDir = newDir;
   _logContext = null;
+  triageCache.clear();
 }
 
 /** Return the current session-level log directory (may be null). */
@@ -175,6 +178,14 @@ export function createServer(): Server {
           "Read this first to understand how to use the analysis tools effectively.",
         mimeType: "text/markdown",
       },
+      {
+        uri: "symphony://log-prefixes",
+        name: "Symphony Log File Prefixes",
+        description:
+          "Complete map of Symphony log file prefix codes to service names, " +
+          "categories, and roles. Use to identify which service produced a log file.",
+        mimeType: "application/json",
+      },
     ],
   }));
 
@@ -184,6 +195,13 @@ export function createServer(): Server {
       return {
         contents: [
           { uri, text: DOMAIN_KNOWLEDGE, mimeType: "text/markdown" },
+        ],
+      };
+    }
+    if (uri === "symphony://log-prefixes") {
+      return {
+        contents: [
+          { uri, text: JSON.stringify(listKnownPrefixes(), null, 2), mimeType: "application/json" },
         ],
       };
     }

@@ -9,11 +9,7 @@
 const TOOL_DEFS: any[] = [
   {
     name: "sym_open",
-    description:
-      "Set the log directory for this session.  Call this FIRST before using any other sym_* tool. " +
-      "Accepts an absolute path to a directory containing Symphony .txt log files, or a bug report folder. " +
-      "Can be called again to switch to a different directory (resets cached state). " +
-      "If called with no arguments, returns the current directory.",
+    description: "Set or switch the active log directory. Call FIRST before other sym_* tools. No args returns current directory.",
     inputSchema: {
       type: "object",
       properties: {
@@ -27,12 +23,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_triage",
-    description:
-      "Automated first-pass diagnosis of a Symphony log set. " +
-      "Runs health analysis, error grouping, service lifecycle, and Windows event log checks in parallel, " +
-      "then produces a prioritized list of findings ranked by severity (CRITICAL/WARNING/INFO) with " +
-      "drill-down hints pointing to the right tool for deeper investigation. " +
-      "Start here when diagnosing an unfamiliar bug report or log set.",
+    description: "Automated first-pass diagnosis. Runs health, errors, lifecycle, and event log checks in parallel with severity ranking. Start here for unfamiliar log sets.",
     inputSchema: {
       type: "object",
       properties: {
@@ -47,14 +38,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_info",
-    description:
-      "Get information about the loaded Symphony log directory or bug report. " +
-      "Actions: " +
-      "'bug_report' — show incident metadata (version, farm, time of error, problem description, server list). " +
-      "'list_files' — list available log files, optionally filtered by prefix (e.g. 'is') or date (YYMMDD). In bug-report mode files are grouped by server. " +
-      "Prefix filtering also works as a file reference in other tools — pass 'is' or 'is-260227' instead of full filenames. " +
-      "'decode_prefix' — look up what a log file prefix means (e.g. 'is'=InfoService, 'cs'=Tracker). Omit prefix to list all known prefixes. " +
-      "'hardware' — show server hardware details (CPU, RAM, disk, OS, NICs) from serverinfo.txt in bug report packages.",
+    description: "Log directory metadata, file listing, and server info. Actions: bug_report, list_files, decode_prefix, hardware.",
     inputSchema: {
       type: "object",
       properties: {
@@ -68,17 +52,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_search",
-    description:
-      "Search Symphony log files for errors or arbitrary patterns. " +
-      "Modes: " +
-      "'errors' — find Error-level entries with deduplication by message fingerprint. Shows unique error patterns with occurrence counts and stack traces. " +
-      "'pattern' — search for text or regex (method names, GUIDs, IPs, request types). Supports context lines and level filtering. " +
-      "'count' — count occurrences of a pattern per file. Returns a table with file name, match count, first/last timestamp. " +
-      "Use this to quickly quantify how often something happens across many files without reading full matches. " +
-      "'assert_absent' — prove a pattern does NOT appear. Returns explicit '0 matches in N files (M lines scanned)' confirmation or lists the unexpected matches found. " +
-      "Use this to verify a code path was never taken, an error never occurred, etc. " +
-      "'files' accepts exact filenames, a prefix like 'ae', or prefix+date like 'ae-260227'. " +
-      "Use startTime/endTime (HH:MM:SS) to narrow to a specific incident window.",
+    description: "Search logs for errors, text, or regex patterns. Modes: errors (deduplicated), pattern (text/regex), count (per-file totals), assert_absent (prove pattern missing).",
     inputSchema: {
       type: "object",
       properties: {
@@ -100,12 +74,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_crashes",
-    description:
-      "Extract crash and exception information from Symphony logs. " +
-      "Modes: " +
-      "'managed' — extract .NET exception stack traces from any log file. Summarizes exception types by frequency. Use exceptionFilter to narrow. " +
-      "'native' — parse pd (PDebug) logs for native C++ crash dumps with full stack traces, register state, and minidump paths. " +
-      "pd logs record crashes for all Symphony server processes (Tracker, InfoService, etc.).",
+    description: "Extract crash and exception data. Modes: managed (.NET stack traces), native (C++ crash dumps from pd logs).",
     inputSchema: {
       type: "object",
       properties: {
@@ -122,13 +91,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_lifecycle",
-    description:
-      "Track service and process lifecycle events. " +
-      "Modes: " +
-      "'services' — find service start, stop, restart, and failover events. Surfaces causes: DB reconnects, ping failures, buddy/failover. Startup chatter is suppressed. " +
-      "'processes' — parse sccp logs to track process lifetimes by PID. Detects restarts, uptime per instance, memory/CPU trends. " +
-      "'gaps' — detect time periods where log files went silent (no entries). Reports gaps exceeding a configurable threshold. Useful for finding service outages, hangs, or crashes. " +
-      "Use 'services' for application-level events, 'processes' for OS-level process tracking.",
+    description: "Track service/process lifecycle events and log gaps. Modes: services (start/stop/restart), processes (PID tracking from sccp), gaps (log silence detection).",
     inputSchema: {
       type: "object",
       properties: {
@@ -148,15 +111,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_timeline",
-    description:
-      "Correlate events across multiple log sources. " +
-      "Modes: " +
-      "'correlate' — merge entries from multiple log files into a single chronological timeline. Cross-reference client and server activity (e.g. ae + is + cs). Filter by time and level. " +
-      "'trace_rpc' — trace a named RPC request from MobileBridge (Mo log) through InfoService (IS log) using sequence numbers. Shows network latency, processing time, invoking user, and round-trip duration. " +
-      "'waves' — find all occurrences of a pattern across files and group them into temporal waves (clusters). " +
-      "A new wave starts when the gap between consecutive matches exceeds gapSeconds (default 300 = 5 min). " +
-      "Reports per-wave: start time, end time, duration, server/file count, match count, first and last match. " +
-      "Ideal for analyzing fan-out patterns (e.g. ForceServerRefreshDeviceGraph across a farm).",
+    description: "Correlate events across log sources. Modes: correlate (merge timelines), trace_rpc (RPC round-trips via Mo+IS), waves (temporal clustering of pattern matches).",
     inputSchema: {
       type: "object",
       properties: {
@@ -178,16 +133,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_http",
-    description:
-      "Analyze HTTP and RPC request performance in Symphony logs. " +
-      "Modes: " +
-      "'requests' (default) — list/filter/group IS HTTP requests (Nancy RequestLogger, port 50014). " +
-      "'slow' — find slow requests exceeding a duration threshold. Merges RPC-level 'took HH:MM:SS' entries with HTTP-layer RequestLogger entries. Set includeRpc=false to show HTTP only. slowGroupBy='request' for method aggregation. " +
-      "'rates' — request rate histogram per minute/5min/hour. " +
-      "'totals' — one-line summary (total, 2xx/3xx/4xx/5xx, error rate). " +
-      "groupBy: 'path' (slowest endpoints), 'client' (most active callers), 'status', 'statusClass'. " +
-      "statusFilter: exact codes [500,503] or class strings ['4xx','5xx','error']. " +
-      "NOTE: MobileBridge uses its own binary protocol on port 8433 (ShConst.DefaultMobilePort), not these HTTP endpoints. Port 50001 is IS WS/SOAP.",
+    description: "Analyze HTTP/RPC request performance from IS logs. Modes: requests, slow, rates, totals. Supports groupBy, statusFilter, and duration thresholds.",
     inputSchema: {
       type: "object",
       properties: {
@@ -215,12 +161,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_ui_thread",
-    description:
-      "Analyze AiraExplorer (ae) client logs to detect UI thread freezes and deadlocks. " +
-      "Shows last activity on the UI thread and detects gaps where the thread went silent. " +
-      "Supports multiple files for cross-file UI analysis. " +
-      "Configurable freeze threshold (default 5000ms). " +
-      "Optionally specify a thread ID or let the tool auto-detect via WPF/WinForms indicators.",
+    description: "Detect UI thread freezes and deadlocks in AiraExplorer (ae) client logs. Configurable freeze threshold.",
     inputSchema: {
       type: "object",
       properties: {
@@ -237,11 +178,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_health",
-    description:
-      "Generate a health dashboard for a Symphony server from sccp process-lifetime data and IS error logs. " +
-      "Shows per-process restart counts, pattern classification (stable/restarted/crash-loop/degrading), " +
-      "peak memory, and overall HEALTHY/DEGRADED/CRITICAL rating." +
-      " 'trends' mode shows per-process memory/CPU trajectory over time from sccp snapshots, flagging processes with >50% memory growth as potential leaks.",
+    description: "Server health dashboard from sccp/IS logs. Modes: dashboard (restarts, status rating), trends (memory/CPU trajectory, leak detection).",
     inputSchema: {
       type: "object",
       properties: {
@@ -257,15 +194,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_compare",
-    description:
-      "Side-by-side comparison of two Symphony log directories (two builds, servers, or before/after). " +
-      "Dimensions (freely combinable via 'include'): " +
-      "'errors' — diff error fingerprints into FIXED/NEW/CHANGED. " +
-      "'health' — summarize_health on each. " +
-      "'lifecycle' — service start/stop/restart events. " +
-      "'http' — hourly request rate histogram. " +
-      "'slow' — grouped slow-request summary. " +
-      "Default: ['errors','lifecycle','health'].",
+    description: "Side-by-side comparison of two log directories. Dimensions: errors, health, lifecycle, http, slow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -288,18 +217,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_db_tables",
-    description:
-      "(Bug report only) Parse database table dumps from a Symphony bug report package. " +
-      "Discovers and parses ASCII-bordered tables, TSV data, SQL output, and key-value config blocks. " +
-      "Modes: " +
-      "'summary' — overview of all discovered tables with row counts by category. " +
-      "'cameras' — camera/device configuration (ID, name, server, resolution, FPS, codec, status). " +
-      "'servers' — server/farm topology (name, IP, role, status). " +
-      "'settings' — system settings and feature flags. " +
-      "'users' — user accounts, roles, auth methods. " +
-      "'licenses' — license entitlements and features. " +
-      "'settings_xml' — parse TableSettings.xml for structured settings with section/key filtering. " +
-      "'raw' — show raw parsed table data, optionally filtered by table name.",
+    description: "(Bug report only) Parse database table dumps. Modes: summary, cameras, servers, settings, users, licenses, settings_xml, raw.",
     inputSchema: {
       type: "object",
       properties: {
@@ -314,14 +232,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_video_health",
-    description:
-      "Analyze video pipeline health from Tracker (cs*), VCD (vcd), and history sender (hs*) logs. " +
-      "Detects camera connection/disconnection, frame drops, codec errors, storage write failures, " +
-      "recording gaps, and stream start/stop events. " +
-      "Modes: 'summary' — overview with counts per category. " +
-      "'events' — chronological event listing. " +
-      "'cameras' — group events by source/camera." +
-      " Results are keyword-matched; for best accuracy use Tracker (cs*), VCD (vcd), or history sender (hs*) log files rather than generic logs.",
+    description: "Video pipeline health from Tracker (cs*), VCD, and history sender (hs*) logs. Modes: summary, events, cameras.",
     inputSchema: {
       type: "object",
       properties: {
@@ -336,14 +247,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_storage",
-    description:
-      "Analyze storage and disk management from Cleaner (sccl) and related logs. " +
-      "Detects disk space warnings, storage full events, retention enforcement, " +
-      "file deletions, and cleaner cycle activity. Answers 'why did recording stop?' " +
-      "Modes: 'summary' — count overview with alerts. " +
-      "'events' — chronological listing. " +
-      "'timeline' — hourly histogram of storage activity." +
-      " Results are keyword-matched; for best accuracy use Cleaner (sccl*) log files rather than generic logs.",
+    description: "Storage and disk management from Cleaner (sccl) logs. Modes: summary, events, timeline.",
     inputSchema: {
       type: "object",
       properties: {
@@ -358,14 +262,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_alarms",
-    description:
-      "Parse Scheduler action logs (scac) for alarm/event rule processing. " +
-      "Tracks alarm triggers, clears, notification delivery (email/relay), " +
-      "rule evaluation, and action execution. Answers 'why didn't the alarm fire?' " +
-      "Modes: 'summary' — count overview. " +
-      "'events' — chronological listing. " +
-      "'failures' — notification and rule failures only." +
-      " Results are keyword-matched; for best accuracy use Scheduler (scac*) log files rather than generic logs.",
+    description: "Alarm/event rule processing from Scheduler (scac) logs. Modes: summary, events, failures.",
     inputSchema: {
       type: "object",
       properties: {
@@ -380,14 +277,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_network",
-    description:
-      "Extract connection and network events from any Symphony log. " +
-      "Tracks TCP connect/disconnect, timeouts, connection refused, DNS failures, and retries. " +
-      "Modes: 'summary' — count overview with problem targets. " +
-      "'events' — chronological listing. " +
-      "'targets' — group by IP/endpoint. " +
-      "'timeouts' — deduplicated timeout patterns." +
-      " Results are keyword-matched and may match application-level connection messages alongside network events. Cross-reference with the originating log source.",
+    description: "Network connection events: TCP, timeouts, DNS failures, retries. Modes: summary, events, targets, timeouts.",
     inputSchema: {
       type: "object",
       properties: {
@@ -403,14 +293,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_access_control",
-    description:
-      "Parse access control integration logs (ac, aacl, lacl, ga) for door events, " +
-      "credential scans, sync operations, and communication failures with panels. " +
-      "Modes: 'summary' — count overview with failure highlights. " +
-      "'events' — chronological listing. " +
-      "'failures' — communication and sync failures only. " +
-      "'sync' — sync operation history with success/fail counts." +
-      " Results are keyword-matched; for best accuracy use access control (ac, aacl, lacl, ga) log files rather than generic logs.",
+    description: "Access control integration (ac, aacl, lacl, ga): door events, credentials, sync, panel failures. Modes: summary, events, failures, sync.",
     inputSchema: {
       type: "object",
       properties: {
@@ -425,17 +308,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_permissions",
-    description:
-      "(Bug report only) Resolve effective user permissions from Symphony bug report database dumps. " +
-      "Handles the group-based permission model where Deny always overrides Grant. " +
-      "Shows which groups cause each permission to be granted or denied — answers " +
-      "'does this user have permission to do X?' with full audit trail. " +
-      "Modes: " +
-      "'resolve' — show all effective permissions for a user with grant/deny sources. " +
-      "'check' — answer 'can user X do Y on resource Z?' with detailed reasoning. " +
-      "'groups' — list all security groups, their members, and permission counts. " +
-      "'rights' — list the full Symphony VMS rights catalog (100+ rights) with IDs. " +
-      "'raw' — dump all discovered permission-related tables for manual inspection.",
+    description: "(Bug report only) Resolve effective user permissions from DB dumps. Modes: resolve, check, groups, rights, raw.",
     inputSchema: {
       type: "object",
       properties: {
@@ -450,19 +323,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_system",
-    description:
-      "(Bug report only) Analyze supplementary system diagnostic files from a Symphony bug report package. " +
-      "These files are captured by LogPackage.cs alongside the log files and provide host-level context. " +
-      "Modes: " +
-      "'overview' — combined summary: OS, hardware, Symphony services status, key ports, license, database stats. " +
-      "'services' — Windows services from sc queryex output. Use symphonyOnly=true to filter to Symphony services. " +
-      "'processes' — running processes from tasklist /V with memory/CPU. " +
-      "'network' — ipconfig + netstat: adapters, IPs, listening ports, active connections. Filter by port number. " +
-      "'environment' — environment variables. " +
-      "'license' — license info and shared memory (printshmem). " +
-      "'files' — installed file listing from dir.txt with sizes and versions. " +
-      "'db_summary' — database table list with row counts. " +
-      "'raw' — dump any supplementary file as-is (omit file= to list available files).",
+    description: "(Bug report only) System diagnostics from bug report package. Modes: overview, services, processes, network, environment, license, files, db_summary, raw.",
     inputSchema: {
       type: "object",
       properties: {
@@ -479,14 +340,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_event_log",
-    description:
-      "(Bug report only) Parse Windows Event Log exports from a Symphony bug report package. " +
-      "LogPackage.cs captures the last 14 days of Application and System event logs as text files. " +
-      "Invaluable for diagnosing service crashes, driver failures, disk errors, and .NET runtime " +
-      "exceptions that occur outside Symphony's own log files. " +
-      "Modes: " +
-      "'entries' (default) — show individual events, filtered and sorted by time. " +
-      "'summary' — breakdown by source and level showing where errors concentrate.",
+    description: "(Bug report only) Parse Windows Event Log exports (Application/System). Modes: entries, summary.",
     inputSchema: {
       type: "object",
       properties: {
@@ -503,16 +357,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_farm",
-    description:
-      "Farm-wide analysis across multiple Symphony server log packages. " +
-      "Point at a parent directory containing server log folders (e.g., a full farm log collection) " +
-      "and get an aggregated dashboard without needing to sym_open each server individually. " +
-      "Modes: " +
-      "'dashboard' — one-line per server showing process counts, restart counts, error counts, and overall status. " +
-      "'errors' — aggregated error patterns across all servers, ranked by frequency, showing which servers are affected. " +
-      "'topology' — server roles and inter-server relationships inferred from log content. " +
-      "'cameras' — camera count per server and problem cameras across the farm. " +
-      "'connectivity' — NxN server ALIVE matrix showing who sees whom, detecting one-way communication and isolated servers.",
+    description: "Farm-wide analysis across multiple server log packages. Modes: dashboard, errors, topology, cameras, connectivity.",
     inputSchema: {
       type: "object",
       properties: {
@@ -532,15 +377,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_auth",
-    description:
-      "Analyze authentication and session events from Symphony IS logs. " +
-      "Detects AD authentication failures, EstablishSecureScope failures, " +
-      "session creation errors, credential issues, and login/logout events. " +
-      "Answers 'why can't this user log in?' and 'are there authentication storms?' " +
-      "Modes: " +
-      "'summary' — count overview by category with affected usernames. " +
-      "'failures' — chronological failure listing with deduplication. " +
-      "'sessions' — login/logout event timeline with session tracking.",
+    description: "Authentication and session events from IS logs. Modes: summary, failures, sessions.",
     inputSchema: {
       type: "object",
       properties: {
@@ -556,15 +393,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_db_health",
-    description:
-      "Analyze database connectivity and health from Symphony IS logs. " +
-      "Detects DB connection failures, SQL exceptions, connection pool exhaustion, " +
-      "command timeouts, and DB recovery events. Clusters failure bursts into outage windows. " +
-      "Answers 'was the DB down?' and 'when did it come back?' " +
-      "Modes: " +
-      "'summary' — overview with outage detection, time span, and failure categories. " +
-      "'outages' — detected outage windows with start time, duration, and event count. " +
-      "'events' — chronological event listing.",
+    description: "Database connectivity and health from IS logs. Detects outages, SQL exceptions, pool exhaustion. Modes: summary, outages, events.",
     inputSchema: {
       type: "object",
       properties: {
@@ -579,14 +408,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_cameras",
-    description:
-      "Analyze camera inventory and status from Tracker (cs*) log files. " +
-      "Discovers cameras from cs{N}_vidcaps.txt capability files and cs{N}-*.txt log files. " +
-      "Scans for disconnects, URL errors, frame drops, and connection issues. " +
-      "Modes: " +
-      "'inventory' — list all discovered cameras with ID range, vidcaps presence, and log file counts. " +
-      "'problems' — cameras ranked by error count with breakdown by type (disconnects, URL errors, frame drops). " +
-      "'status' — healthy/unhealthy camera overview.",
+    description: "Camera inventory and status from Tracker (cs*) logs. Modes: inventory, problems, status.",
     inputSchema: {
       type: "object",
       properties: {
@@ -600,15 +422,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_interserver",
-    description:
-      "Analyze inter-server communication patterns from Symphony IS logs. " +
-      "Tracks ALIVE/PING heartbeat messages, ConnectionException errors, " +
-      "ExecuteOnProxy failures, and ClientTerminated events. " +
-      "Answers 'can this server talk to the others?' and 'which links are failing?' " +
-      "Modes: " +
-      "'summary' — event type breakdown with failure targets ranked by frequency. " +
-      "'map' — server communication map showing ALIVE send/recv counts and failure counts per target. " +
-      "'failures' — chronological listing of communication failures.",
+    description: "Inter-server communication from IS logs: heartbeats, connection failures, proxy errors. Modes: summary, map, failures.",
     inputSchema: {
       type: "object",
       properties: {
@@ -624,16 +438,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_hw",
-    description:
-      "Analyze hardware integration events from Symphony logs. " +
-      "Detects Advantech/ADAM device errors, serial port issues, door controller events, " +
-      "IO module status, and general hardware connection failures. " +
-      "Answers 'are the hardware integrations working?' and 'which devices are failing?' " +
-      "Modes: " +
-      "'summary' — overview by category and severity with known device inventory. " +
-      "'advantech' — Advantech/ADAM specific events. " +
-      "'devices' — device inventory with event and error counts. " +
-      "'errors' — all hardware errors in chronological order.",
+    description: "Hardware integration events: Advantech/ADAM, serial ports, IO modules. Modes: summary, advantech, devices, errors.",
     inputSchema: {
       type: "object",
       properties: {

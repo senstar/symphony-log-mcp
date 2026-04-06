@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server for automated analysis of Symphony VMS log files. This server provides AI assistants with powerful tools to diagnose errors, compare test runs, track process health, and identify performance issues across Symphony deployments.
 
+> **Current version: 2.3.0**
+
 ## What is MCP?
 
 [Model Context Protocol](https://modelcontextprotocol.io) is an open standard that enables AI assistants to securely access external tools and data sources. This server implements MCP to give AI assistants specialized capabilities for analyzing Symphony logs.
@@ -25,6 +27,11 @@ A Model Context Protocol (MCP) server for automated analysis of Symphony VMS log
 - **Database table parsing** - Extract camera, server, user, and license config from bug report SQL dumps
 - **Hardware configuration** - CPU, RAM, disk, NIC details from serverinfo.txt
 - **Domain knowledge resource** - MCP resource providing log format spec, service graph, and diagnostic playbooks
+- **Farm-wide analysis** - Multi-server dashboard, cross-server error aggregation, topology mapping, camera status
+- **Authentication analysis** - Login failures, session tracking, Active Directory events
+- **Database health monitoring** - SQL connectivity outages, pool exhaustion, recovery tracking
+- **Inter-server communication** - Heartbeat monitoring, connection failure detection, server topology mapping
+- **Hardware integration** - Advantech/ADAM modules, serial ports, IO device monitoring
 
 ## Installation
 
@@ -96,7 +103,7 @@ Once configured, you can ask your AI assistant natural language questions like:
 
 The AI assistant will automatically invoke the appropriate MCP tools and interpret the results for you.
 
-## Available Tools (20)
+## Available Tools (26)
 
 All tools use the `sym_` prefix for easy discovery.
 
@@ -122,6 +129,12 @@ All tools use the `sym_` prefix for easy discovery.
 | `sym_permissions` | *(Bug report only)* Resolve effective user permissions with full audit trail (mode: `resolve` \| `check` \| `groups` \| `rights` \| `raw`) |
 | `sym_system` | *(Bug report only)* System diagnostics from supplementary files (mode: `overview` \| `services` \| `processes` \| `network` \| `environment` \| `license` \| `files` \| `db_summary` \| `raw`) |
 | `sym_event_log` | *(Bug report only)* Parse Windows Event Log exports — crashes, driver failures, .NET runtime errors (mode: `entries` \| `summary`) |
+| `sym_farm` | Farm-wide analysis across multiple server log packages (mode: `dashboard` \| `errors` \| `topology` \| `cameras` \| `connectivity`) |
+| `sym_auth` | Authentication and session events from IS logs (mode: `summary` \| `failures` \| `sessions`) |
+| `sym_db_health` | Database connectivity and health from IS logs — outages, SQL exceptions, pool exhaustion (mode: `summary` \| `outages` \| `events`) |
+| `sym_cameras` | Camera inventory and status from Tracker (cs*) logs (mode: `inventory` \| `problems` \| `status`) |
+| `sym_interserver` | Inter-server communication from IS logs — heartbeats, connection failures, proxy errors (mode: `summary` \| `map` \| `failures`) |
+| `sym_hw` | Hardware integration events — Advantech/ADAM, serial ports, IO modules (mode: `summary` \| `advantech` \| `devices` \| `errors`) |
 
 ## Resources
 

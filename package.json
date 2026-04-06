@@ -39,7 +39,7 @@
   "author": "Senstar",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "adm-zip": "^0.5.16"
   },
   "devDependencies": {

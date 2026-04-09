@@ -1,0 +1,28 @@
+{
+  "fixture": "setup-wizard-ops",
+  "description": "Setup Wizard applies configuration changes (camera timeout 30s→60s, max streams 16→24), triggers a graceful InfoService restart. Se- log shows the wizard flow. IS log shows the stop request with 'Setup Wizard initiated restart' reason and clean restart.",
+  "expectedIssues": [
+    {
+      "severity": "WARNING",
+      "category": "Lifecycle",
+      "keyPhrases": ["Setup Wizard", "restart", "stop"]
+    }
+  ],
+  "triage": {
+    "expectedSeverity": "WARNING",
+    "mustContain": ["stop", "restart"],
+    "mustNotContain": ["crash-loop", "CRITICAL", "crash dump"]
+  },
+  "errors": {
+    "expectedCount": { "min": 0, "max": 2 },
+    "expectedPatterns": []
+  },
+  "lifecycle": {
+    "expectedRestarts": { "min": 0, "max": 2 },
+    "expectedEvents": ["Service starting", "stop"]
+  },
+  "health": {
+    "expectedRating": "HEALTHY",
+    "crashLoopProcesses": []
+  }
+}

@@ -1,0 +1,46 @@
+10:00:00.000       1 <BasicInf> Service	InfoService.OnStart	Service starting
+10:00:00.500       1 <BasicInf> Service	InfoService.OnStart	Loading configuration from C:\Program Files\Senstar\Symphony\config
+10:00:01.000       1 <BasicInf> Service	InfoService.OnStart	Service started successfully
+10:00:02.000       1 <BasicInf> Licensing	PermitProvider.Load	Loading permits from database
+10:00:02.500       1 <MoreInfo> Licensing	PermitProvider.Load	Loaded 48 permits from database
+10:00:05.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+10:00:05.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+10:00:10.000       1 <BasicInf> Service	Heartbeat	Alive
+10:15:00.000       1 <BasicInf> Service	Heartbeat	Alive
+10:20:00.000    5678 <BasicInf> Licensing	LicenseManager.ImportLicenses	ImportLicenses called by operator@1
+10:20:00.100    5678 <MoreInfo> Licensing	LicenseManager.ImportLicenses	Previous registration was performed offline
+10:20:00.200    5678 <BasicInf> Licensing	PermitsDAL.ClearPermits	ClearPermits: DELETE FROM Permits
+10:20:00.300    5678 <MoreInfo> Licensing	PermitsDAL.ClearPermits	Deleted 48 permit records
+10:20:00.500    5678 <BasicInf> Licensing	LicenseManager.ImportLicenses	Parsing license file C:\ProgramData\Senstar\Symphony\license.lic
+10:20:01.000    5678 <Error   > Licensing	LicenseManager.ImportLicenses	System.FormatException: License file contains invalid XML
+   at Seer.Licensing.LicenseParser.ParseXml() in C:\src\LicenseParser.cs:line 78
+   at Seer.Licensing.LicenseManager.ImportLicenses() in C:\src\LicenseManager.cs:line 134
+10:20:01.100    5678 <Error   > Licensing	LicenseManager.ImportLicenses	Failed to import licenses - permits table is now empty
+10:20:01.500    5678 <Error   > Licensing	PermitProvider.Allocate	PermitAllocationException: No permits available for camera type 'IP Camera'
+10:20:02.000    5678 <Error   > Licensing	PermitProvider.Allocate	PermitAllocationException: No permits available for camera type 'IP Camera'
+10:20:02.500    5678 <Error   > Licensing	PermitProvider.Allocate	PermitAllocationException: No permits available for camera type 'IP Camera'
+10:20:03.000    1234 <Error   > WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0450000 status=500 client=10.60.31.10:51234
+10:20:03.500    1234 <Error   > Licensing	PermitProvider.Check	Permit check failed: no permit allocated for camera 5
+10:20:04.000    1234 <Error   > Licensing	PermitProvider.Check	Permit check failed: no permit allocated for camera 12
+10:20:04.500    1234 <Error   > Licensing	PermitProvider.Check	Permit check failed: no permit allocated for camera 3
+10:20:05.000    5678 <Error   > Licensing	PermitProvider.Allocate	PermitAllocationException: No permits available for camera type 'Thermal'
+10:20:05.500    5678 <Error   > Licensing	PermitProvider.Load	Failed to reload permits: table is empty
+10:20:10.000    1234 <Error   > WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0380000 status=500 client=10.60.31.10:51234
+10:20:15.000    5678 <BasicInf> Licensing	LicenseManager.ImportLicenses	Retrying license import with backup file
+10:20:15.500    5678 <BasicInf> Licensing	LicenseManager.ImportLicenses	Parsing license file C:\ProgramData\Senstar\Symphony\license.bak
+10:20:16.000    5678 <BasicInf> Licensing	LicenseManager.ImportLicenses	License parsed successfully: 48 camera permits, 4 IO permits
+10:20:16.500    5678 <BasicInf> Licensing	PermitsDAL.InsertPermits	Inserting 52 permits into database
+10:20:17.000    5678 <BasicInf> Licensing	PermitProvider.Load	Loaded 52 permits from database
+10:20:17.500    5678 <MoreInfo> Licensing	PermitProvider.Allocate	Allocated permit for camera 5: IP Camera
+10:20:18.000    5678 <MoreInfo> Licensing	PermitProvider.Allocate	Allocated permit for camera 12: IP Camera
+10:20:18.500    5678 <MoreInfo> Licensing	PermitProvider.Allocate	Allocated permit for camera 3: IP Camera
+10:20:19.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0290000 status=200 client=10.60.31.10:51234
+10:20:20.000       1 <BasicInf> Service	Heartbeat	Alive
+10:25:00.000       1 <BasicInf> Service	Heartbeat	Alive
+10:25:05.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+10:25:05.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+10:25:05.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+10:25:10.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+10:30:00.000       1 <BasicInf> Service	Heartbeat	Alive
+10:30:05.000    5678 <MoreInfo> Licensing	PermitProvider.Check	Permit check: camera 5 authorized
+10:30:10.000    5678 <MoreInfo> Licensing	PermitProvider.Check	Permit check: camera 12 authorized

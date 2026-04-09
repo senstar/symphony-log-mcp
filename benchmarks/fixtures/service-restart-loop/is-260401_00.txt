@@ -1,0 +1,59 @@
+09:00:00.000       1 <BasicInf> Service	InfoService.OnStart	Service starting
+09:00:00.500       1 <BasicInf> Service	InfoService.OnStart	Loading configuration from C:\Program Files\Senstar\Symphony\config
+09:00:01.000       1 <BasicInf> Service	InfoService.OnStart	Service started successfully
+09:00:05.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+09:00:05.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+09:00:05.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+09:00:10.000    5678 <BasicInf> Tracker	Tracker.Connect	Camera 5 stream connected at 30fps
+09:00:15.000    5678 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+09:05:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:10:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:12:33.100    9012 <Error   > Tracker	Tracker.Update	System.AccessViolationException: Attempted to read or write protected memory.
+   at Seer.Tracker.NativeWrapper.ProcessFrame() in C:\src\NativeWrapper.cs:line 187
+   at Seer.Tracker.TrackerEngine.Run() in C:\src\TrackerEngine.cs:line 94
+09:12:33.200    9012 <Error   > Service	ProcessMonitor.OnCrash	Process Tracker(1) (PID=9012) terminated unexpectedly with exit code -1073741819
+09:12:33.500       1 <BasicInf> Service	ProcessMonitor.Restart	Restarting Tracker(1) - attempt 1 of 5
+09:12:35.000       1 <BasicInf> Service	ProcessMonitor.Restart	Tracker(1) restarted with PID=9100
+09:12:36.000    9100 <BasicInf> Tracker	Tracker.Connect	Camera 5 stream connected at 30fps
+09:12:40.000    9100 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+09:15:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:17:45.800    9100 <Error   > Tracker	Tracker.Update	System.AccessViolationException: Attempted to read or write protected memory.
+   at Seer.Tracker.NativeWrapper.ProcessFrame() in C:\src\NativeWrapper.cs:line 187
+   at Seer.Tracker.TrackerEngine.Run() in C:\src\TrackerEngine.cs:line 94
+09:17:45.900    9100 <Error   > Service	ProcessMonitor.OnCrash	Process Tracker(1) (PID=9100) terminated unexpectedly with exit code -1073741819
+09:17:46.200       1 <BasicInf> Service	ProcessMonitor.Restart	Restarting Tracker(1) - attempt 2 of 5
+09:17:48.000       1 <BasicInf> Service	ProcessMonitor.Restart	Tracker(1) restarted with PID=9200
+09:17:49.000    9200 <BasicInf> Tracker	Tracker.Connect	Camera 5 stream connected at 30fps
+09:17:53.000    9200 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+09:20:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:24:12.300    9200 <Error   > Tracker	Tracker.Update	System.AccessViolationException: Attempted to read or write protected memory.
+   at Seer.Tracker.NativeWrapper.ProcessFrame() in C:\src\NativeWrapper.cs:line 187
+   at Seer.Tracker.TrackerEngine.Run() in C:\src\TrackerEngine.cs:line 94
+09:24:12.400    9200 <Error   > Service	ProcessMonitor.OnCrash	Process Tracker(1) (PID=9200) terminated unexpectedly with exit code -1073741819
+09:24:12.700       1 <BasicInf> Service	ProcessMonitor.Restart	Restarting Tracker(1) - attempt 3 of 5
+09:24:14.000       1 <BasicInf> Service	ProcessMonitor.Restart	Tracker(1) restarted with PID=9300
+09:24:15.000    9300 <BasicInf> Tracker	Tracker.Connect	Camera 5 stream connected at 30fps
+09:24:19.000    9300 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+09:25:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:30:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:32:08.600    9300 <Error   > Tracker	Tracker.Update	System.AccessViolationException: Attempted to read or write protected memory.
+   at Seer.Tracker.NativeWrapper.ProcessFrame() in C:\src\NativeWrapper.cs:line 187
+   at Seer.Tracker.TrackerEngine.Run() in C:\src\TrackerEngine.cs:line 94
+09:32:08.700    9300 <Error   > Service	ProcessMonitor.OnCrash	Process Tracker(1) (PID=9300) terminated unexpectedly with exit code -1073741819
+09:32:08.900       1 <Error   > Service	ProcessMonitor.Restart	Tracker(1) has crashed 4 times in 20 minutes - exceeds restart threshold
+09:32:09.000       1 <BasicInf> Service	ProcessMonitor.Restart	Restarting Tracker(1) - attempt 4 of 5
+09:32:11.000       1 <BasicInf> Service	ProcessMonitor.Restart	Tracker(1) restarted with PID=9400
+09:32:12.000    9400 <BasicInf> Tracker	Tracker.Connect	Camera 5 stream connected at 30fps
+09:32:16.000    9400 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+09:35:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:35:05.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+09:35:05.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+09:35:05.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+09:35:10.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+09:40:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:40:05.000    9400 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+09:45:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:45:05.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0450000 status=200 client=10.60.31.10:51234
+09:50:00.000       1 <BasicInf> Service	Heartbeat	Alive
+09:50:05.000    9400 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+09:55:00.000       1 <BasicInf> Service	Heartbeat	Alive

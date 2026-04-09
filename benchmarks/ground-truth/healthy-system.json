@@ -1,0 +1,22 @@
+{
+  "fixture": "healthy-system",
+  "description": "Clean system with no errors, no restarts, stable processes. All APIs return 200, cameras healthy, cleaner cycle normal.",
+  "expectedIssues": [],
+  "triage": {
+    "expectedSeverity": "HEALTHY",
+    "mustContain": ["healthy"],
+    "mustNotContain": ["crash-loop", "CRITICAL", "SEEMS FAILED", "DEGRADED", "crash dump"]
+  },
+  "errors": {
+    "expectedCount": { "min": 0, "max": 0 },
+    "expectedPatterns": []
+  },
+  "lifecycle": {
+    "expectedRestarts": { "min": 0, "max": 0 },
+    "expectedEvents": ["Service starting", "Service started"]
+  },
+  "health": {
+    "expectedRating": "HEALTHY",
+    "crashLoopProcesses": []
+  }
+}

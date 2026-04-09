@@ -1,0 +1,27 @@
+14:25:00.000       1 <BasicInf> Setup	SetupWizard.OnStart	Setup Wizard starting
+14:25:00.500       1 <BasicInf> Setup	SetupWizard.OnStart	Connecting to InfoService on localhost:8398
+14:25:01.000       1 <BasicInf> Setup	SetupWizard.OnStart	Connected to InfoService
+14:25:02.000       1 <BasicInf> Setup	SetupWizard.LoadConfig	Loading current server configuration
+14:25:02.500       1 <MoreInfo> Setup	SetupWizard.LoadConfig	Server name: SERVER1
+14:25:03.000       1 <MoreInfo> Setup	SetupWizard.LoadConfig	Database: SERVER1\SQLEXPRESS
+14:25:03.500       1 <MoreInfo> Setup	SetupWizard.LoadConfig	IP: 10.60.31.4 (Master)
+14:25:04.000       1 <BasicInf> Setup	SetupWizard.LoadConfig	Configuration loaded successfully
+14:25:10.000    5678 <BasicInf> Setup	SetupWizard.ApplyChanges	User initiated configuration change
+14:25:10.500    5678 <MoreInfo> Setup	SetupWizard.ApplyChanges	Updating camera connection timeout: 30s -> 60s
+14:25:11.000    5678 <MoreInfo> Setup	SetupWizard.ApplyChanges	Updating max concurrent streams: 16 -> 24
+14:25:11.500    5678 <BasicInf> Setup	SetupWizard.ApplyChanges	Writing changes to registry
+14:25:12.000    5678 <BasicInf> Setup	SetupWizard.ApplyChanges	Registry updated successfully
+14:25:15.000    5678 <BasicInf> Setup	SetupWizard.RestartService	Configuration change requires service restart
+14:25:15.500    5678 <BasicInf> Setup	SetupWizard.RestartService	Sending stop command to InfoService
+14:25:16.000    5678 <MoreInfo> Setup	SetupWizard.RestartService	Waiting for InfoService to stop
+14:25:20.000    5678 <BasicInf> Setup	SetupWizard.RestartService	InfoService stopped
+14:25:20.500    5678 <BasicInf> Setup	SetupWizard.RestartService	Sending start command to InfoService
+14:25:25.000    5678 <BasicInf> Setup	SetupWizard.RestartService	InfoService started successfully
+14:25:25.500    5678 <BasicInf> Setup	SetupWizard.RestartService	Service restart complete
+14:25:30.000       1 <BasicInf> Setup	SetupWizard.Verify	Verifying configuration applied correctly
+14:25:30.500       1 <MoreInfo> Setup	SetupWizard.Verify	Camera connection timeout: 60s - OK
+14:25:31.000       1 <MoreInfo> Setup	SetupWizard.Verify	Max concurrent streams: 24 - OK
+14:25:31.500       1 <BasicInf> Setup	SetupWizard.Verify	Verification complete - all changes applied
+14:25:35.000       1 <BasicInf> Setup	SetupWizard.OnStop	Setup Wizard closing
+14:25:35.500       1 <BasicInf> Setup	SetupWizard.OnStop	Disconnecting from InfoService
+14:25:36.000       1 <BasicInf> Setup	SetupWizard.OnStop	Setup Wizard stopped

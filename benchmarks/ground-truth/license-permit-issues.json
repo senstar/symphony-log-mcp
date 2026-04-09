@@ -1,0 +1,28 @@
+{
+  "fixture": "license-permit-issues",
+  "description": "ImportLicenses called by operator, ClearPermits deletes all 48 permits, then FormatException parsing license.lic leaves permits table empty. PermitAllocationException errors follow until backup license file restores permits.",
+  "expectedIssues": [
+    {
+      "severity": "WARNING",
+      "category": "Licensing",
+      "keyPhrases": ["PermitAllocationException", "FormatException", "license"]
+    }
+  ],
+  "triage": {
+    "expectedSeverity": "WARNING",
+    "mustContain": ["error", "FormatException"],
+    "mustNotContain": ["crash-loop", "SEEMS FAILED"]
+  },
+  "errors": {
+    "expectedCount": { "min": 5, "max": 20 },
+    "expectedPatterns": ["FormatException", "PermitAllocationException", "Permit check failed", "status=500"]
+  },
+  "lifecycle": {
+    "expectedRestarts": { "min": 0, "max": 1 },
+    "expectedEvents": ["Service starting", "Service started"]
+  },
+  "health": {
+    "expectedRating": "HEALTHY",
+    "crashLoopProcesses": []
+  }
+}

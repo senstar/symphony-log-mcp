@@ -12,7 +12,8 @@ export default defineConfig({
   },
   test: {
     root: ".",
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "benchmarks/**/*.bench.ts"],
     testTimeout: 10_000,
   },
 });
+

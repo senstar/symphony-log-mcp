@@ -1,0 +1,47 @@
+{
+  "fixture": "multiple-issues",
+  "description": "Compound failure: server 5003 SEEMS FAILED with connectivity errors, Tracker(1) crashes once (AccessViolationException), AE client crashes with NullReferenceException and writes crash dumps, brief database transport-level error. Server 5003 recovers after ~25 minutes.",
+  "expectedIssues": [
+    {
+      "severity": "CRITICAL",
+      "category": "Connectivity",
+      "keyPhrases": ["SEEMS FAILED", "5003"]
+    },
+    {
+      "severity": "CRITICAL",
+      "category": "Crashes",
+      "keyPhrases": ["crash dump", "unhandled exception", "minidump"]
+    },
+    {
+      "severity": "WARNING",
+      "category": "Health",
+      "keyPhrases": ["restart", "DEGRADED"]
+    },
+    {
+      "severity": "INFO",
+      "category": "Database",
+      "keyPhrases": ["SqlException", "transport-level"]
+    }
+  ],
+  "triage": {
+    "expectedSeverity": "CRITICAL",
+    "mustContain": ["SEEMS FAILED", "crash", "CRITICAL", "restart", "5003"],
+    "mustNotContain": ["HEALTHY"]
+  },
+  "errors": {
+    "expectedCount": { "min": 10, "max": 30 },
+    "expectedPatterns": ["AccessViolationException", "SqlException", "NullReferenceException", "Unable to connect"]
+  },
+  "lifecycle": {
+    "expectedRestarts": { "min": 1, "max": 3 },
+    "expectedEvents": ["Restarting Tracker", "Service starting"]
+  },
+  "health": {
+    "expectedRating": "DEGRADED",
+    "crashLoopProcesses": []
+  },
+  "connectivity": {
+    "expectedIssueCount": 1,
+    "mustContain": ["SEEMS FAILED", "5003"]
+  }
+}

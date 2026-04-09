@@ -1,0 +1,73 @@
+08:00:00.000       1 <BasicInf> Service	InfoService.OnStart	Service starting
+08:00:00.500       1 <BasicInf> Service	InfoService.OnStart	Loading configuration from C:\Program Files\Senstar\Symphony\config
+08:00:01.000       1 <BasicInf> Service	InfoService.OnStart	Service started successfully
+08:00:02.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+08:00:02.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:00:02.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:00:03.000       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5003
+08:00:05.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:00:10.000       1 <BasicInf> Service	Heartbeat	Alive
+08:05:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:10:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:10:05.000       1 <BasicInf> Service	Heartbeat	Alive
+08:15:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:15:30.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+08:15:30.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:15:30.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:15:48.000    1234 <BasicInf> Communication	HealthMonitor.Check	Server 5003 ### SEEMS FAILED ###. (No ALIVE message for 18 seconds)
+08:15:48.500    1234 <Error   > Communication	ConnectionManager.Handle	Unable to connect to server 5003
+08:16:00.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+08:16:00.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:16:00.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:16:18.000    1234 <BasicInf> Communication	HealthMonitor.Check	Server 5003 ### SEEMS FAILED ###. (No ALIVE message for 18 seconds)
+08:16:18.500    1234 <Error   > Communication	RpcProxy.Execute	ExecuteOnProxy failed for 5003: timeout
+08:16:19.000    1234 <Error   > Communication	ClientManager.Process	ClientTerminated Processing of client 10.60.32.3:8398
+08:20:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:20:05.000       1 <BasicInf> Service	Heartbeat	Alive
+08:25:00.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+08:25:00.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:25:00.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:25:18.000    1234 <BasicInf> Communication	HealthMonitor.Check	Server 5003 ### SEEMS FAILED ###. (No ALIVE message for 18 seconds)
+08:25:18.500    1234 <Error   > Communication	ConnectionManager.Handle	Unable to connect to server 5003
+08:30:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:30:05.000       1 <BasicInf> Service	Heartbeat	Alive
+08:35:00.000    1234 <Error   > Communication	ConnectionManager.Connect	Unable to resolve server address 'NODE3.corp.local'
+08:35:01.000    1234 <Error   > Communication	ConnectionManager.Connect	Unable to resolve server address 'NODE3.corp.local'
+08:35:05.000       1 <BasicInf> Communication	DeviceGraph.Push	ForceServerRefreshDeviceGraph received from master
+08:35:10.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+08:35:10.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:35:10.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:35:28.000    1234 <BasicInf> Communication	HealthMonitor.Check	Server 5003 ### SEEMS FAILED ###. (No ALIVE message for 28 seconds)
+08:40:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:40:05.000       1 <BasicInf> Service	Heartbeat	Alive
+08:45:00.000    1234 <Error   > Communication	TcpTransport.Connect	Connection refused: 10.60.32.3:8398
+08:45:01.000    1234 <Error   > Communication	TcpTransport.Connect	Connection refused: 10.60.32.3:8398
+08:45:05.000    1234 <Error   > Communication	RpcClient.Send[CallRPC]	System.TimeoutException: The operation timed out. Target=10.60.32.3:8398
+08:45:10.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+08:45:10.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:45:10.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:50:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:50:05.000       1 <BasicInf> Service	Heartbeat	Alive
+08:55:00.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+08:55:00.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:55:00.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:55:01.000    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5003
+08:55:01.500    1234 <BasicInf> Communication	HealthMonitor.Check	Server 5003 ### BACK UP ###. Setting his state to Up.
+08:55:05.000    1234 <MoreInfo> Communication	ServerInfo.Log	Server 5003 at IP 10.60.32.3 recovered
+09:00:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+09:00:05.000       1 <BasicInf> Service	Heartbeat	Alive
+09:00:10.000    5678 <Error   > Communication	WebServiceExchange	No message dispatcher/pool available to route WebServiceMessageExchange request(s) to.
+09:00:11.000    5678 <Error   > Communication	WebServiceExchange	No message dispatcher/pool available to route WebServiceMessageExchange request(s) to.
+09:00:15.000    1234 <BasicInf> Communication	BuddyManager.Send	SendMessageToBuddies ALIVE message to 10.60.32.1:5045
+09:00:20.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0450000 status=200 client=10.60.31.10:51234
+09:05:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+09:05:05.000       1 <BasicInf> Service	Heartbeat	Alive
+09:05:10.000    1234 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002, 5003
+09:05:10.500    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+09:05:10.700    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+09:05:10.900    1234 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5003
+09:10:00.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+09:10:05.000       1 <BasicInf> Service	Heartbeat	Alive
+09:10:10.000    1234 <BasicInf> Communication	ServerInfo.Log	Server 5001 at IP 10.60.32.1 is healthy
+09:10:11.000    1234 <BasicInf> Communication	ServerInfo.Log	Server 5002 at IP 10.60.32.2 is healthy
+09:10:12.000    1234 <BasicInf> Communication	ServerInfo.Log	Server 5003 at IP 10.60.32.3 is healthy

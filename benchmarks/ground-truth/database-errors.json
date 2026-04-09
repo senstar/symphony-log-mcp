@@ -1,0 +1,28 @@
+{
+  "fixture": "database-errors",
+  "description": "SQL Server becomes unresponsive causing transport-level errors, connection pool exhaustion, command timeouts, a deadlock, and HTTP 500 responses. Database recovers after ~5 minutes. sqlservr.exe CPU spikes to 78.5% during the incident.",
+  "expectedIssues": [
+    {
+      "severity": "WARNING",
+      "category": "Database",
+      "keyPhrases": ["SqlException", "transport-level error", "Timeout expired"]
+    }
+  ],
+  "triage": {
+    "expectedSeverity": "WARNING",
+    "mustContain": ["SqlException", "error", "timeout"],
+    "mustNotContain": ["crash-loop", "SEEMS FAILED"]
+  },
+  "errors": {
+    "expectedCount": { "min": 8, "max": 25 },
+    "expectedPatterns": ["SqlException", "Timeout expired", "deadlock", "command timeout", "status=500"]
+  },
+  "lifecycle": {
+    "expectedRestarts": { "min": 0, "max": 0 },
+    "expectedEvents": ["Service starting", "Service started"]
+  },
+  "health": {
+    "expectedRating": "HEALTHY",
+    "crashLoopProcesses": []
+  }
+}

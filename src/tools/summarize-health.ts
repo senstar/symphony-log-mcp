@@ -106,8 +106,31 @@ export async function computeHealthSummary(
 
   processRows.sort((a, b) => b.restarts - a.restarts || a.name.localeCompare(b.name));
 
-  const totalRestarts = processRows.reduce((s, r) => s + r.restarts, 0);
-  const crashLoopCount = processRows.filter(r => r.pattern === "crash-loop").length;
+  let totalRestarts = processRows.reduce((s, r) => s + r.restarts, 0);
+  let crashLoopCount = processRows.filter(r => r.pattern === "crash-loop").length;
+
+  // Infer process health from error messages when no sccp process data available
+  if (processCount === 0 && errorResult) {
+    for (const [, group] of errorResult.groups) {
+      const msg = group.first.line.message;
+      if (/terminated\s+unexpectedly/i.test(msg)) {
+        totalRestarts += group.count;
+      }
+      const clMatch = msg.match(/^(\S+(?:\(\d+\))?)\s+has\s+crashed\s+(\d+)\s+times/i);
+      if (clMatch) {
+        crashLoopCount++;
+        processRows.push({
+          name: clMatch[1],
+          restarts: parseInt(clMatch[2]),
+          pattern: "crash-loop",
+          peakMem: 0,
+          longestRunMins: 0,
+          longestRunSparse: true,
+        });
+      }
+    }
+  }
+
   const errorCount = errorResult
     ? [...errorResult.groups.values()].reduce((s, g) => s + g.count, 0)
     : 0;
@@ -203,7 +226,7 @@ export async function toolSummarizeHealth(
   let health: string;
   if (crashLoopCount > 0 || totalRestarts >= 5) {
     health = "CRITICAL";
-  } else if (totalRestarts > 0 || errorCount > 50) {
+  } else if (totalRestarts > 0 || errorCount > 5) {
     health = "DEGRADED";
   } else {
     health = "HEALTHY";
@@ -211,7 +234,11 @@ export async function toolSummarizeHealth(
 
   out.push("═".repeat(60));
   out.push(`  OVERALL HEALTH: ${health}`);
-  out.push(`  Restarts: ${totalRestarts}   Crash-loops: ${crashLoopCount}   Error occurrences: ${errorCount}`);
+  const stats: string[] = [];
+  if (totalRestarts > 0) stats.push(`Restarts: ${totalRestarts}`);
+  if (crashLoopCount > 0) stats.push(`Crash-loops: ${crashLoopCount}`);
+  if (errorCount > 0) stats.push(`Error occurrences: ${errorCount}`);
+  out.push(`  ${stats.length > 0 ? stats.join('   ') : 'No issues detected'}`);
   out.push("═".repeat(60));
 
   return out.join("\n");

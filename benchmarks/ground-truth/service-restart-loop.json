@@ -1,0 +1,33 @@
+{
+  "fixture": "service-restart-loop",
+  "description": "Tracker(1) crashes 4 times with AccessViolationException in 20 minutes, triggering crash-loop detection. PID changes from 9012 to 9100 to 9200 to 9300 to 9400.",
+  "expectedIssues": [
+    {
+      "severity": "CRITICAL",
+      "category": "Health",
+      "keyPhrases": ["crash-loop", "Tracker"]
+    },
+    {
+      "severity": "WARNING",
+      "category": "Health",
+      "keyPhrases": ["restart"]
+    }
+  ],
+  "triage": {
+    "expectedSeverity": "CRITICAL",
+    "mustContain": ["crash-loop", "Tracker", "CRITICAL", "restart", "AccessViolationException"],
+    "mustNotContain": ["HEALTHY"]
+  },
+  "errors": {
+    "expectedCount": { "min": 5, "max": 15 },
+    "expectedPatterns": ["AccessViolationException", "terminated unexpectedly"]
+  },
+  "lifecycle": {
+    "expectedRestarts": { "min": 3, "max": 6 },
+    "expectedEvents": ["Restarting Tracker", "Service starting"]
+  },
+  "health": {
+    "expectedRating": "CRITICAL",
+    "crashLoopProcesses": ["Tracker(1)"]
+  }
+}

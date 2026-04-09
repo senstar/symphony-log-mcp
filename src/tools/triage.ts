@@ -541,7 +541,7 @@ export async function toolTriage(
     let health: string;
     if (h.crashLoopCount > 0 || h.totalRestarts >= 5) {
       health = "CRITICAL";
-    } else if (h.totalRestarts > 0 || h.errorCount > 50) {
+    } else if (h.totalRestarts > 0 || h.errorCount > 5) {
       health = "DEGRADED";
     } else {
       health = "HEALTHY";
@@ -587,7 +587,7 @@ export async function toolTriage(
     const errorCount = [...groups.values()].reduce((s, g) => s + g.count, 0);
     const uniquePatterns = groups.size;
 
-    if (errorCount > 50) {
+    if (errorCount > 5) {
       findings.push({
         severity: "WARNING",
         category: "Errors",
@@ -701,7 +701,7 @@ export async function toolTriage(
     // ForceServerRefreshDeviceGraph missing
     if (conn.isFarmMember && !conn.hasForceRefresh) {
       findings.push({
-        severity: "WARNING",
+        severity: "INFO",
         category: "Connectivity",
         message: "No ForceServerRefreshDeviceGraph received — server may not get push notifications for device changes",
         drillDown: "sym_interserver mode=summary",
@@ -966,7 +966,13 @@ export async function toolTriage(
     "  SYMPHONY TRIAGE REPORT",
     bar,
     "",
-    `  ${findings.length} finding(s) — ${critical} critical, ${warnings} warnings, ${info} info`,
+    (() => {
+    const parts: string[] = [];
+    if (critical > 0) parts.push(`${critical} critical`);
+    if (warnings > 0) parts.push(`${warnings} warning${warnings !== 1 ? 's' : ''}`);
+    if (info > 0) parts.push(`${info} info`);
+    return `  ${findings.length} finding(s) — ${parts.length > 0 ? parts.join(', ') : 'all clear'}`;
+  })(),
     "",
   ];
 

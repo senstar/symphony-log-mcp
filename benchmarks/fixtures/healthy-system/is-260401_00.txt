@@ -1,0 +1,74 @@
+08:00:00.000       1 <BasicInf> Service	InfoService.OnStart	Service starting
+08:00:00.250       1 <BasicInf> Service	InfoService.OnStart	Loading configuration from C:\Program Files\Senstar\Symphony\config
+08:00:00.500       1 <MoreInfo> Service	InfoService.OnStart	Configuration loaded successfully
+08:00:01.000       1 <BasicInf> Service	InfoService.OnStart	Initializing database connection to SERVER1\SQLEXPRESS
+08:00:01.500       1 <BasicInf> Service	InfoService.OnStart	Database connection established
+08:00:02.000       1 <BasicInf> Service	InfoService.OnStart	Loading permits from database
+08:00:02.300       1 <MoreInfo> Licensing	PermitProvider.Load	Loaded 48 permits from database
+08:00:02.500       1 <BasicInf> Service	InfoService.OnStart	Loading device graph
+08:00:03.000       1 <MoreInfo> Device	DeviceManager.Init	Loading 24 cameras from database
+08:00:03.500       1 <MoreInfo> Device	DeviceManager.Init	Loading 4 IO modules from database
+08:00:04.000       1 <BasicInf> Device	DeviceManager.Init	Device graph loaded: 24 cameras, 4 IO modules, 2 doors
+08:00:04.500       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:00:05.000       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:00:05.200       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:00:05.500       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:00:06.000       1 <BasicInf> Service	InfoService.OnStart	Service started successfully
+08:00:10.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0340000 status=200 client=10.60.31.10:51234
+08:00:10.500    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/alarms took 00:00:00.0280000 status=200 client=10.60.31.10:51234
+08:00:15.000    5678 <BasicInf> Communication	TcpTransport.Connect	Connected to 10.60.32.1:8398
+08:00:20.000       1 <BasicInf> Service	Heartbeat	Alive
+08:00:25.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0290000 status=200 client=10.60.31.10:51234
+08:00:30.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:00:30.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:00:30.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:00:35.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:00:40.000       1 <BasicInf> Service	Heartbeat	Alive
+08:00:45.000    1234 <BasicInf> WebService	RequestLogger[AE]	POST /api/ptz took 00:00:00.0120000 status=200 client=10.60.31.10:51234
+08:00:50.000    5678 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+08:00:55.000    5678 <BasicInf> Tracker	Tracker.Update	Camera 12 receiving frames at 25 fps
+08:01:00.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:01:00.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:01:00.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:01:05.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:01:10.000       1 <BasicInf> Service	Heartbeat	Alive
+08:01:15.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/alarms took 00:00:00.0310000 status=200 client=10.60.31.10:51234
+08:01:20.000    5678 <BasicInf> Communication	ServerInfo.Log	Server 5001 at IP 10.60.32.1 is healthy
+08:01:25.000    5678 <BasicInf> Communication	ServerInfo.Log	Server 5002 at IP 10.60.32.2 is healthy
+08:01:30.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:01:30.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:01:30.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:01:35.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:01:40.000       1 <BasicInf> Service	Heartbeat	Alive
+08:01:45.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0260000 status=200 client=10.60.31.11:52000
+08:01:50.000    5678 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+08:01:55.000    5678 <BasicInf> Tracker	Tracker.Update	Camera 12 receiving frames at 25 fps
+08:02:00.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:02:00.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:02:00.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:02:05.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:02:10.000       1 <BasicInf> Service	Heartbeat	Alive
+08:02:15.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/alarms took 00:00:00.0250000 status=200 client=10.60.31.10:51234
+08:02:20.000    1234 <BasicInf> WebService	RequestLogger[AE]	POST /api/ptz took 00:00:00.0090000 status=200 client=10.60.31.10:51234
+08:02:25.000    5678 <MoreInfo> Licensing	PermitProvider.Check	Permit check: camera 5 authorized
+08:02:30.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:02:30.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:02:30.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:02:35.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:02:40.000       1 <BasicInf> Service	Heartbeat	Alive
+08:02:45.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/cameras took 00:00:00.0310000 status=200 client=10.60.31.10:51234
+08:02:50.000    5678 <BasicInf> Tracker	Tracker.Update	Camera 5 receiving frames at 30 fps
+08:02:55.000    5678 <BasicInf> Tracker	Tracker.Update	Camera 12 receiving frames at 25 fps
+08:03:00.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:03:00.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:03:00.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002
+08:03:05.000       1 <BasicInf> Communication	UpdateDeltaCache	UpdateDeltaCache starting delta poll
+08:03:10.000       1 <BasicInf> Service	Heartbeat	Alive
+08:03:15.000    1234 <BasicInf> WebService	RequestLogger[AE]	GET /api/alarms took 00:00:00.0270000 status=200 client=10.60.31.10:51234
+08:03:20.000    5678 <MoreInfo> Device	DeviceManager.Status	All 24 cameras reporting healthy
+08:03:25.000       1 <BasicInf> Cleaner	CleanerService.Run	Cleaner cycle started
+08:03:26.000       1 <BasicInf> Cleaner	CleanerService.Run	Disk D: usage 48% (894.2 GB / 1863.0 GB)
+08:03:27.000       1 <BasicInf> Cleaner	CleanerService.Run	Cleaner cycle complete - no action needed
+08:03:30.000       1 <BasicInf> Communication	BuddyManager.Send	Sending ALIVE ---> 5001, 5002
+08:03:30.500       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5001
+08:03:30.700       1 <BasicInf> Communication	BuddyManager.Receive	Received ALIVE <--- 5002

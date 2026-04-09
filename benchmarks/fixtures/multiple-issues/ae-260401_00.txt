@@ -1,0 +1,66 @@
+07:00:00.000       1 <BasicInf> UI	WPFApplication.Run	Application started on thread 1
+07:00:00.100       1 <BasicInf> UI	MainWindow.Initialize	Main window created
+07:00:00.200       1 <BasicInf> UI	MainWindow.Loaded	UI layout complete
+07:00:01.000       1 <BasicInf> Communication	ConnectionManager.Connect	Connecting to 10.60.31.4:8398
+07:00:01.500       1 <BasicInf> Communication	ConnectionManager.Connect	Connected to 10.60.31.4:8398
+07:00:02.000       1 <BasicInf> Security	AuthManager.Login	Login successful for user operator@DOMAIN
+07:00:05.000       1 <BasicInf> UI	MainWindow.Update	Loading camera panel
+07:00:05.500       1 <BasicInf> UI	MainWindow.Update	Camera panel loaded with 24 cameras
+07:05:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:05:00.200       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:10:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:10:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:15:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:15:00.200       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:20:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:20:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:20:30.000       1 <Error   > Communication	ConnectionManager.Handle	Server 5003 reported as unreachable by InfoService
+07:20:30.500       1 <MoreInfo> UI	DeviceTree.Update	Removing server 5003 devices from tree
+07:25:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:25:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:25:30.000       1 <Error   > Communication	MessageRouter.Send	RequestFailedDelivery for GetCameraList to server 5003
+07:25:31.000       1 <Error   > Communication	MessageRouter.Send	RequestFailedDelivery for FeatureExists to server 5003
+07:30:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:30:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:30:15.000       1 <Error   > Tracker	Tracker.Disconnect	Camera 5 connection lost
+07:30:15.500       1 <MoreInfo> UI	VideoPanel.Update	Camera 5 video feed lost - showing placeholder
+07:30:20.000       1 <BasicInf> Tracker	Tracker.Connect	Camera 5 stream reconnecting
+07:30:25.000       1 <BasicInf> Tracker	Tracker.Connect	Camera 5 stream connected at 30fps
+07:35:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:35:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:40:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:40:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:40:05.000       1 <Error   > Communication	ConnectionManager.Connect	Connection refused: 10.60.32.3:8398
+07:40:10.000       1 <Error   > Communication	MessageRouter.Send	Could not retrieve result for ServerConfigPort from server 5003
+07:45:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:45:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:45:12.000       1 <BasicInf> Communication	ConnectionManager.Connect	Server 5003 reconnected
+07:45:12.500       1 <MoreInfo> UI	DeviceTree.Update	Adding server 5003 devices back to tree
+07:50:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:50:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:50:05.000       1 <BasicInf> UI	MainWindow.Update	Normal operation
+07:55:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+07:55:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+07:55:12.000       1 <Error   > System	Application_ThreadException	System.NullReferenceException: Object reference not set to an instance of an object.
+   at Seer.UI.AlarmPanel.OnTimer()
+   at System.Windows.Forms.Timer.OnTick()
+07:55:12.100       1 <Error   > System	MyUnhandledExceptionHandlerTerminator	Fatal: writing dump before exit
+07:55:12.200       1 <BasicInf> System	DumpWriter	Saved minidump to C:\ProgramData\Senstar\dumps\ae_075512.dmp
+07:55:12.300       1 <BasicInf> System	DumpWriter	Saved minidump to C:\ProgramData\Senstar\dumps\ae_075512_full.dmp
+07:55:12.500       1 <BasicInf> UI	WPFApplication.OnExit	Application exiting due to unhandled exception
+07:55:12.600       1 <BasicInf> Security	AuthManager.Logout	Logout user operator@DOMAIN session closed
+07:55:12.700       1 <BasicInf> Communication	ConnectionManager.Disconnect	Disconnected from 10.60.31.4:8398 reason=Exception
+08:00:00.000       1 <BasicInf> UI	WPFApplication.Run	Application started on thread 1
+08:00:00.100       1 <BasicInf> UI	MainWindow.Initialize	Main window created
+08:00:00.200       1 <BasicInf> UI	MainWindow.Loaded	UI layout complete
+08:00:01.000       1 <BasicInf> Communication	ConnectionManager.Connect	Connecting to 10.60.31.4:8398
+08:00:01.500       1 <BasicInf> Communication	ConnectionManager.Connect	Connected to 10.60.31.4:8398
+08:00:02.000       1 <BasicInf> Security	AuthManager.Login	Login successful for user operator@DOMAIN
+08:00:05.000       1 <BasicInf> UI	MainWindow.Update	Loading camera panel
+08:00:05.500       1 <BasicInf> UI	MainWindow.Update	Camera panel loaded with 24 cameras
+08:05:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+08:05:00.200       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+08:10:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+08:10:00.300       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete
+08:15:00.000       1 <BasicInf> UI	MainWindow.Update	Refreshing camera panel
+08:15:00.200       1 <BasicInf> UI	MainWindow.Update	Panel refresh complete

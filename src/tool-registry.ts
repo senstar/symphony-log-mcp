@@ -189,7 +189,7 @@ const TOOL_DEFS: any[] = [
         startTime:  { type: "string", description: "Only include data at or after HH:MM:SS" },
         endTime:    { type: "string", description: "Only include data at or before HH:MM:SS" },
       },
-      required: ["sccpFiles"],
+      required: [],
     },
   },
   {
@@ -217,7 +217,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_db_tables",
-    description: "(Bug report only) Parse database table dumps. Modes: summary, cameras, servers, settings, users, licenses, settings_xml, raw.",
+    description: "Parse database table dumps. Modes: summary, cameras, servers, settings, users, licenses, settings_xml, raw. Works with bug reports or standalone log directories containing Table*.txt files.",
     inputSchema: {
       type: "object",
       properties: {
@@ -308,7 +308,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_permissions",
-    description: "(Bug report only) Resolve effective user permissions from DB dumps. Modes: resolve, check, groups, rights, raw.",
+    description: "(Bug report only -- requires DB table dumps) Resolve effective user permissions. Modes: resolve, check, groups, rights, raw.",
     inputSchema: {
       type: "object",
       properties: {
@@ -323,7 +323,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_system",
-    description: "(Bug report only) System diagnostics from bug report package. Modes: overview, services, processes, network, environment, license, files, db_summary, raw.",
+    description: "System diagnostics from supplementary files (services.txt, tasklist.txt, etc.). Works with bug reports or log directories containing these files. Modes: overview, services, processes, network, environment, license, files, db_summary, raw.",
     inputSchema: {
       type: "object",
       properties: {
@@ -340,7 +340,7 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_event_log",
-    description: "(Bug report only) Parse Windows Event Log exports (Application/System). Modes: entries, summary.",
+    description: "Parse Windows Event Log exports (EventLogApplication.txt, EventLogSystem.txt). Works with bug reports or log directories containing these files. Modes: entries, summary.",
     inputSchema: {
       type: "object",
       properties: {

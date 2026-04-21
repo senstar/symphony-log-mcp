@@ -11,6 +11,8 @@
  */
 
 import type { BugReport, ServerExtras } from "../lib/bug-report.js";
+import * as fs from "fs/promises";
+import * as path from "path";
 import {
   parseServicesTxt,
   parseTasklistTxt,
@@ -70,10 +72,20 @@ export interface SystemDiagArgs {
 export async function toolSystemDiag(
   bugReport: BugReport | null,
   args: SystemDiagArgs,
+  dirs?: string | string[],
 ): Promise<string> {
+  if (!bugReport && dirs) {
+    // Non-bug-report fallback: search directory tree for supplementary files
+    const extras = await discoverSystemFiles(dirs);
+    if (!extras) {
+      return "No supplementary diagnostic files (services.txt, tasklist.txt, systeminfo.txt, etc.) found in the log directory tree. " +
+             "These files are typically present only in bug report server zips.";
+    }
+    const syntheticServers: ServerCtx[] = [{ label: "Server (from log directory)", extras }];
+    return dispatchSystemMode(syntheticServers, args);
+  }
   if (!bugReport) {
-    return "System diagnostics require a bug report package (not a plain log directory). " +
-           "These files (services.txt, tasklist.txt, etc.) are only present in bug report server zips.";
+    return "System diagnostics require a bug report package or a log directory containing supplementary files.";
   }
 
   const servers = bugReport.servers.filter(s => !s.isClient && s.extras);
@@ -81,6 +93,13 @@ export async function toolSystemDiag(
     return "No server data with supplementary files found in this bug report.";
   }
 
+  return dispatchSystemMode(
+    servers.map(s => ({ label: s.label, extras: s.extras! })),
+    args,
+  );
+}
+
+async function dispatchSystemMode(servers: ServerCtx[], args: SystemDiagArgs): Promise<string> {
   const { mode } = args;
   const limit = args.limit ?? 100;
 
@@ -545,4 +564,68 @@ async function renderRaw(
   }
 
   return out.length > 0 ? out.join("\n") : `File '${fileName}' not found in any server package.`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Non-bug-report fallback: discover supplementary files in directory tree
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SYSTEM_FILE_MAP: { key: keyof ServerExtras; patterns: RegExp[] }[] = [
+  { key: "servicesTxt",    patterns: [/^services\.txt$/i] },
+  { key: "tasklistTxt",    patterns: [/^tasklist\.txt$/i] },
+  { key: "ipconfigTxt",    patterns: [/^ipconfig\.txt$/i] },
+  { key: "netstatTxt",     patterns: [/^netstat\.txt$/i] },
+  { key: "systeminfoTxt",  patterns: [/^systeminfo\.txt$/i] },
+  { key: "environmentTxt", patterns: [/^environment\.txt$/i, /^set\.txt$/i] },
+  { key: "licenseTxt",     patterns: [/^license\.txt$/i, /^licensing\.txt$/i] },
+  { key: "eventLogAppTxt", patterns: [/^EventLogApplication\.txt$/i] },
+  { key: "eventLogSysTxt", patterns: [/^EventLogSystem\.txt$/i] },
+];
+
+async function discoverSystemFiles(dirs: string | string[]): Promise<ServerExtras | null> {
+  const searchDirs = Array.isArray(dirs) ? dirs : [dirs];
+  const extras: Partial<ServerExtras> = {};
+  let found = 0;
+
+  for (const dir of searchDirs) {
+    // Walk up to 4 parent levels to find supplementary files
+    let current = dir;
+    for (let depth = 0; depth < 5; depth++) {
+      try {
+        const entries = await fs.readdir(current, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile()) continue;
+          for (const mapping of SYSTEM_FILE_MAP) {
+            if (extras[mapping.key]) continue; // already found
+            if (mapping.patterns.some(p => p.test(entry.name))) {
+              (extras as Record<string, string>)[mapping.key] = path.join(current, entry.name);
+              found++;
+            }
+          }
+        }
+        // Also check subdirectories one level deep
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          try {
+            const subEntries = await fs.readdir(path.join(current, entry.name), { withFileTypes: true });
+            for (const subEntry of subEntries) {
+              if (!subEntry.isFile()) continue;
+              for (const mapping of SYSTEM_FILE_MAP) {
+                if (extras[mapping.key]) continue;
+                if (mapping.patterns.some(p => p.test(subEntry.name))) {
+                  (extras as Record<string, string>)[mapping.key] = path.join(current, entry.name, subEntry.name);
+                  found++;
+                }
+              }
+            }
+          } catch { /* skip unreadable subdirs */ }
+        }
+      } catch { /* skip unreadable dirs */ }
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+
+  return found > 0 ? extras as ServerExtras : null;
 }

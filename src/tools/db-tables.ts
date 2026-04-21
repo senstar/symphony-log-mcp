@@ -701,36 +701,139 @@ function formatSummary(tables: ParsedTable[]): string {
 export async function toolDbTables(
   bugReport: BugReport | null,
   args: DbTablesArgs,
+  dirs?: string | string[],
 ): Promise<string> {
-  if (!bugReport) {
-    return "sym_db_tables requires a bug report package. Point LOG_DIR at a bug report folder.";
-  }
-
   const limit = args.limit ?? 100;
 
-  // ── settings_xml mode — parse TableSettings.xml from extras ──
-  if (args.mode === "settings_xml") {
-    return await formatSettingsXml(bugReport, args.section, args.key, limit);
-  }
+  // ── Bug report mode: use structured extraction ──
+  if (bugReport) {
+    // settings_xml mode — parse TableSettings.xml from extras
+    if (args.mode === "settings_xml") {
+      return await formatSettingsXml(bugReport, args.section, args.key, limit);
+    }
 
-  // Discover and parse all table data — use extras.tableFiles when available
-  const servers = bugReport.servers.filter(s => !s.isClient);
-  const allTableFiles: string[] = [];
+    // Discover and parse all table data — use extras.tableFiles when available
+    const servers = bugReport.servers.filter(s => !s.isClient);
+    const allTableFiles: string[] = [];
 
-  for (const srv of servers) {
-    if (srv.extras?.tableFiles?.length) {
-      allTableFiles.push(...srv.extras.tableFiles);
+    for (const srv of servers) {
+      if (srv.extras?.tableFiles?.length) {
+        allTableFiles.push(...srv.extras.tableFiles);
+      }
+    }
+
+    // Also discover from the folder itself (fallback)
+    const discoveredFiles = await discoverTableFiles(bugReport.folderPath);
+    for (const f of discoveredFiles) {
+      if (!allTableFiles.includes(f)) allTableFiles.push(f);
+    }
+
+    if (allTableFiles.length === 0) {
+      return "No files containing database table data found in the bug report.";
+    }
+
+    const tables = await parseAllTables(allTableFiles);
+    if (tables.length === 0) {
+      return `Scanned ${allTableFiles.length} file(s) but found no parseable table data.`;
+    }
+
+    switch (args.mode) {
+      case "cameras":  return formatCameras(tables, limit);
+      case "servers":  return formatServers(tables, limit);
+      case "settings": return formatSettings(tables, limit);
+      case "users":    return formatUsers(tables, limit);
+      case "licenses": return formatLicenses(tables, limit);
+      case "raw":      return formatRaw(tables, args.tableName, limit);
+      case "summary":  return formatSummary(tables);
+      default:
+        return `Unknown mode: ${args.mode}. Use: cameras, servers, settings, users, licenses, raw, summary, settings_xml.`;
     }
   }
 
-  // Also discover from the folder itself (fallback)
-  const discoveredFiles = await discoverTableFiles(bugReport.folderPath);
-  for (const f of discoveredFiles) {
-    if (!allTableFiles.includes(f)) allTableFiles.push(f);
+  // ── Non-bug-report mode: search log directory tree for supplementary files ──
+  if (!dirs) {
+    return "sym_db_tables: no log directory available. Open a log directory with sym_open first.";
+  }
+
+  const dirList = Array.isArray(dirs) ? dirs : [dirs];
+  const allTableFiles: string[] = [];
+
+  for (const logDir of dirList) {
+    // Search the log dir itself, parent, and sibling directories for Table/settings files
+    const searchRoots = new Set<string>();
+    searchRoots.add(logDir);
+
+    // Walk up to 4 levels of parents to find supplementary files
+    // (SymphonyLog ZIPs may have logs deeply nested under Users/.../ai_logs/)
+    let current = logDir;
+    for (let i = 0; i < 4; i++) {
+      const parent = path.dirname(current);
+      if (parent === current) break; // reached filesystem root
+      searchRoots.add(parent);
+      current = parent;
+    }
+
+    for (const root of searchRoots) {
+      const discovered = await discoverTableFiles(root);
+      for (const f of discovered) {
+        if (!allTableFiles.includes(f)) allTableFiles.push(f);
+      }
+    }
+  }
+
+  // Also search for settings_xml mode by looking for TableSettings.xml in the tree
+  if (args.mode === "settings_xml") {
+    const xmlFiles = await findFilesRecursive(dirList, /^TableSettings\.xml$/i);
+    if (xmlFiles.length === 0) {
+      return "No TableSettings.xml found. This file is typically included in bug report packages.";
+    }
+    // Parse and format each found file
+    const out: string[] = [];
+    for (const xmlPath of xmlFiles) {
+      const text = await readFileOrNull(xmlPath);
+      if (!text) continue;
+
+      let entries = parseTableSettingsXml(text);
+      if (args.section) {
+        const f = args.section.toLowerCase();
+        entries = entries.filter(e => e.section.toLowerCase().includes(f));
+      }
+      if (args.key) {
+        const f = args.key.toLowerCase();
+        entries = entries.filter(e => e.key.toLowerCase().includes(f));
+      }
+
+      out.push(`\n═══ ${path.basename(path.dirname(xmlPath))} — ${entries.length} setting(s) ═══\n`);
+
+      const bySection = new Map<string, typeof entries>();
+      for (const e of entries) {
+        const key = e.section || "(no section)";
+        if (!bySection.has(key)) bySection.set(key, []);
+        bySection.get(key)!.push(e);
+      }
+
+      let shown = 0;
+      for (const [section, items] of bySection) {
+        if (shown >= limit) break;
+        out.push(`  [${section}]`);
+        for (const item of items) {
+          if (shown >= limit) break;
+          const valPreview = item.value.length > 80 ? item.value.slice(0, 80) + "…" : item.value;
+          out.push(`    ${item.key} = ${valPreview}`);
+          shown++;
+        }
+      }
+      if (entries.length > limit) {
+        out.push(`\n  ... and ${entries.length - limit} more entries (use section= or key= to filter)`);
+      }
+    }
+    return out.length > 0 ? out.join("\n") : "No parseable settings found in TableSettings.xml files.";
   }
 
   if (allTableFiles.length === 0) {
-    return "No files containing database table data found in the bug report.";
+    return "No files containing database table data found in the log directory tree. " +
+           "Table dumps (Table*.txt, TableSettings.xml) are typically included in bug report packages " +
+           "but may also appear alongside log files in some SymphonyLog exports.";
   }
 
   const tables = await parseAllTables(allTableFiles);
@@ -749,6 +852,51 @@ export async function toolDbTables(
     default:
       return `Unknown mode: ${args.mode}. Use: cameras, servers, settings, users, licenses, raw, summary, settings_xml.`;
   }
+}
+
+/**
+ * Recursively search directories for files matching a name pattern.
+ * Walks up to 6 levels deep from each starting directory and its parents.
+ */
+async function findFilesRecursive(dirs: string[], namePattern: RegExp, maxDepth = 6): Promise<string[]> {
+  const results: string[] = [];
+  const visited = new Set<string>();
+
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > maxDepth || visited.has(dir)) return;
+    visited.add(dir);
+
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isFile() && namePattern.test(entry.name)) {
+          results.push(full);
+        } else if (entry.isDirectory()) {
+          await walk(full, depth + 1);
+        }
+      }
+    } catch { /* skip unreadable */ }
+  }
+
+  // Search from each log dir and walk up to find sibling directories too
+  const searchRoots = new Set<string>();
+  for (const d of dirs) {
+    searchRoots.add(d);
+    let current = d;
+    for (let i = 0; i < 4; i++) {
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      searchRoots.add(parent);
+      current = parent;
+    }
+  }
+
+  for (const root of searchRoots) {
+    await walk(root, 0);
+  }
+
+  return results;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

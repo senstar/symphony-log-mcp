@@ -10,6 +10,8 @@
  */
 
 import type { BugReport } from "../lib/bug-report.js";
+import * as fs from "fs/promises";
+import * as path from "path";
 import {
   parseEventLogTxt,
   readFileOrNull,
@@ -58,10 +60,19 @@ export interface EventLogArgs {
 export async function toolEventLog(
   bugReport: BugReport | null,
   args: EventLogArgs,
+  dirs?: string | string[],
 ): Promise<string> {
+  if (!bugReport && dirs) {
+    // Non-bug-report fallback: search directory tree for event log files
+    const files = await discoverEventLogFiles(dirs);
+    if (!files.app && !files.sys) {
+      return "No Windows Event Log exports (EventLogApplication.txt, EventLogSystem.txt) found in the log directory tree. " +
+             "These files are typically present only in bug report server zips.";
+    }
+    return renderEventLogFromFiles(files, args);
+  }
   if (!bugReport) {
-    return "Event logs require a bug report package (not a plain log directory). " +
-           "These files (EventLogApplication.txt, EventLogSystem.txt) are only present in bug report server zips.";
+    return "Event logs require a bug report package or a log directory containing event log exports.";
   }
 
   const servers = bugReport.servers.filter(s => !s.isClient && s.extras);
@@ -207,4 +218,118 @@ function renderEntries(label: string, entries: EventLogEntry[], limit: number): 
   }
 
   return lines.join("\n");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Non-bug-report fallback helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DiscoveredEventLogFiles {
+  app: string | null;
+  sys: string | null;
+}
+
+async function discoverEventLogFiles(dirs: string | string[]): Promise<DiscoveredEventLogFiles> {
+  const searchDirs = Array.isArray(dirs) ? dirs : [dirs];
+  const result: DiscoveredEventLogFiles = { app: null, sys: null };
+
+  for (const dir of searchDirs) {
+    let current = dir;
+    for (let depth = 0; depth < 5; depth++) {
+      try {
+        const entries = await fs.readdir(current, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile()) continue;
+          if (/^EventLogApplication\.txt$/i.test(entry.name) && !result.app) {
+            result.app = path.join(current, entry.name);
+          }
+          if (/^EventLogSystem\.txt$/i.test(entry.name) && !result.sys) {
+            result.sys = path.join(current, entry.name);
+          }
+        }
+        // Check one level of subdirectories
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          try {
+            const subEntries = await fs.readdir(path.join(current, entry.name), { withFileTypes: true });
+            for (const sub of subEntries) {
+              if (!sub.isFile()) continue;
+              if (/^EventLogApplication\.txt$/i.test(sub.name) && !result.app) {
+                result.app = path.join(current, entry.name, sub.name);
+              }
+              if (/^EventLogSystem\.txt$/i.test(sub.name) && !result.sys) {
+                result.sys = path.join(current, entry.name, sub.name);
+              }
+            }
+          } catch { /* skip unreadable subdirs */ }
+        }
+      } catch { /* skip unreadable dirs */ }
+      if (result.app && result.sys) break;
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+    if (result.app && result.sys) break;
+  }
+
+  return result;
+}
+
+async function renderEventLogFromFiles(
+  files: DiscoveredEventLogFiles,
+  args: EventLogArgs,
+): Promise<string> {
+  const entries: EventLogEntry[] = [];
+  const limit = args.limit ?? 50;
+  const mode = args.mode ?? "entries";
+
+  if ((args.log === "application" || args.log === "both") && files.app) {
+    const text = await readFileOrNull(files.app);
+    if (text) {
+      const parsed = parseEventLogTxt(text);
+      for (const e of parsed) e.source = e.source || "(Application)";
+      entries.push(...parsed);
+    }
+  }
+  if ((args.log === "system" || args.log === "both") && files.sys) {
+    const text = await readFileOrNull(files.sys);
+    if (text) {
+      const parsed = parseEventLogTxt(text);
+      for (const e of parsed) e.source = e.source || "(System)";
+      entries.push(...parsed);
+    }
+  }
+
+  if (entries.length === 0) {
+    return "Event log file(s) found but contained no parseable entries.";
+  }
+
+  // Apply filters
+  let filtered = entries;
+
+  if (args.level) {
+    const levels = new Set(args.level.toLowerCase().split(",").map(l => l.trim()));
+    filtered = filtered.filter(e => levels.has(e.level.toLowerCase()));
+  }
+  if (args.source) {
+    const src = args.source.toLowerCase();
+    filtered = filtered.filter(e => e.source.toLowerCase().includes(src));
+  }
+  if (args.eventId !== undefined) {
+    filtered = filtered.filter(e => e.eventId === args.eventId);
+  }
+  if (args.search) {
+    const s = args.search.toLowerCase();
+    filtered = filtered.filter(e => e.message.toLowerCase().includes(s));
+  }
+
+  filtered.sort((a, b) => {
+    if (a.timestamp && b.timestamp) return b.timestamp.localeCompare(a.timestamp);
+    return 0;
+  });
+
+  if (mode === "summary") {
+    return renderSummary("Server (from log directory)", filtered);
+  }
+  return renderEntries("Server (from log directory)", filtered, limit);
 }

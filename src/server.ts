@@ -95,8 +95,9 @@ async function computeLogContext(dir: string): Promise<LogContext> {
 
 /**
  * If `dir` itself contains Symphony log files, return it as-is.
- * Otherwise check for a `Log/` or `Logs/` child (common layout in
- * extracted server log packages) and return that instead.
+ * Otherwise search recursively for a subdirectory containing log files
+ * (e.g. `ai_logs/`, `Log/`, or deeply nested paths from extracted ZIPs
+ *  like `Users/.../Senstar7/ai_logs/`).
  */
 async function resolveLogSubdir(dir: string): Promise<string> {
   // Quick check: does the directory itself contain any log-formatted files?
@@ -106,14 +107,32 @@ async function resolveLogSubdir(dir: string): Promise<string> {
     if (hasLogs) return dir;
   } catch { /* ignore */ }
 
-  // Try Log/ then Logs/ subdirectories
-  for (const sub of ["Log", "Logs"]) {
-    const candidate = path.join(dir, sub);
+  // Recursively search for first directory containing log files (BFS, max depth 8)
+  const queue: { path: string; depth: number }[] = [{ path: dir, depth: 0 }];
+  const maxDepth = 8;
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.depth > maxDepth) continue;
+
     try {
-      const stat = fs.statSync(candidate);
-      if (stat.isDirectory()) return candidate;
-    } catch { /* not found */ }
+      const entries = fs.readdirSync(current.path, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const subPath = path.join(current.path, entry.name);
+
+        // Check if this subdirectory contains log files
+        try {
+          const subEntries = fs.readdirSync(subPath);
+          const hasLogs = subEntries.some(e => /^[a-zA-Z]+-\d{6}_\d+\.txt$/i.test(e));
+          if (hasLogs) return subPath;
+        } catch { /* skip unreadable */ }
+
+        queue.push({ path: subPath, depth: current.depth + 1 });
+      }
+    } catch { /* skip unreadable */ }
   }
+
   return dir;
 }
 

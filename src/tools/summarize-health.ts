@@ -9,13 +9,13 @@
 
 import { computeProcessLifetimes } from "./process-lifetimes.js";
 import { computeErrorGroups } from "./search-errors.js";
-import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
+import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings, listLogFiles } from "../lib/log-reader.js";
 import { isSymphonyProcess } from "../lib/symphony-patterns.js";
 import * as path from "path";
 
 export interface SummarizeHealthArgs {
-  /** sccp log file(s) for process lifetime analysis */
-  sccpFiles: string[];
+  /** sccp log file(s) for process lifetime analysis (auto-detected if omitted) */
+  sccpFiles?: string[];
   /** IS / other log files for error counts (optional) */
   errorFiles?: string[];
   startTime?: string;
@@ -35,9 +35,27 @@ export async function computeHealthSummary(
   processCount: number;
   topErrors: { count: number; message: string }[];
 }> {
+  // Auto-detect sccp files if not provided
+  let sccpFiles = args.sccpFiles;
+  if (!sccpFiles || sccpFiles.length === 0) {
+    const found = await listLogFiles(logDir, { prefix: "sccp" });
+    sccpFiles = found.length > 0 ? ["sccp"] : [];
+  }
+  if (sccpFiles.length === 0) {
+    return {
+      processRows: [],
+      totalRestarts: 0,
+      crashLoopCount: 0,
+      errorCount: 0,
+      uniquePatterns: 0,
+      processCount: 0,
+      topErrors: [],
+    };
+  }
+
   const [lifetimeResult, errorResult] = await Promise.all([
     computeProcessLifetimes(logDir, {
-      files: args.sccpFiles,
+      files: sccpFiles,
       symphonyOnly: true,
       showAll: true,
       startTime: args.startTime,

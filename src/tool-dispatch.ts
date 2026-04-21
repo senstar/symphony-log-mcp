@@ -205,9 +205,13 @@ export async function dispatchToolCall(
     // ---- sym_lifecycle: services + processes ----
     case "sym_lifecycle": {
       const mode = a.mode as string;
+      // Auto-detect files when not provided
+      const lifecycleFiles = (a.files as string[] | undefined) ?? (
+        mode === "processes" ? ["sccp"] : ["is"]
+      );
       if (mode === "services") {
         return await toolGetServiceLifecycle(ctx.dirs, {
-          files:        a.files        as string[],
+          files:        lifecycleFiles,
           includePings: a.includePings as boolean | undefined,
           startTime:    a.startTime    as string | undefined,
           endTime:      a.endTime      as string | undefined,
@@ -215,7 +219,7 @@ export async function dispatchToolCall(
         });
       } else if (mode === "processes") {
         return await toolGetProcessLifetimes(ctx.dirs, {
-          files:        a.files        as string[],
+          files:        lifecycleFiles,
           symphonyOnly: a.symphonyOnly as boolean | undefined,
           filter:       a.filter       as string | undefined,
           showAll:      a.showAll      as boolean | undefined,
@@ -225,7 +229,7 @@ export async function dispatchToolCall(
         });
       } else if (mode === "gaps") {
         return await toolDetectLogGaps(ctx.dirs, {
-          files:           a.files           as string[],
+          files:           lifecycleFiles,
           gapThresholdSec: a.gapThresholdSec as number | undefined,
           startTime:       a.startTime       as string | undefined,
           endTime:         a.endTime         as string | undefined,
@@ -345,7 +349,7 @@ export async function dispatchToolCall(
         section:   a.section   as string | undefined,
         key:       a.key       as string | undefined,
         limit:     a.limit     as number | undefined,
-      });
+      }, ctx.dirs);
 
     case "sym_video_health":
       return await toolVideoHealth(ctx.dirs, {
@@ -411,7 +415,7 @@ export async function dispatchToolCall(
         port:         a.port         as number | undefined,
         file:         a.file         as string | undefined,
         limit:        a.limit        as number | undefined,
-      });
+      }, ctx.dirs);
 
     case "sym_event_log":
       return await toolEventLog(ctx.bugReport, {
@@ -422,7 +426,7 @@ export async function dispatchToolCall(
         eventId: a.eventId as number | undefined,
         search:  a.search  as string | undefined,
         limit:   a.limit   as number | undefined,
-      });
+      }, ctx.dirs);
 
     case "sym_farm":
       return await toolFarmSummary(logDirRaw, {

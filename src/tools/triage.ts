@@ -1,4 +1,4 @@
-/**
+﻿/**
  * triage.ts
  *
  * Automated first-pass diagnosis tool. Runs multiple analyses in parallel
@@ -95,6 +95,7 @@ const RE_UNHANDLED_EXCEPTION = /Application_ThreadException|CurrentDomain_Unhand
 const RE_DNS_FAILURE = /Unable\s+to\s+resolve\s+server\s+address\s+'([^']+)'/i;
 const RE_SESSION_FAILURE = /TokenNotFoundException|InvalidSession(?:Exception|ID)|Seer\.Exceptions\.InvalidSessionException/i;
 const RE_DELIVERY_FAILURE = /RequestFailedDelivery|Could\s+not\s+retrieve\s+result/i;
+const RE_SERVICE_ALREADY_RUNNING = /Could\s+not\s+start\s+service.*(?:0x420|00000420|ERROR_SERVICE_ALREADY_RUNNING)/i;
 const RE_LOG_LEVEL_CHANGED = /Logging\s+level\s+changed\s+to:\s*(.+)/i;
 const RE_UPDATE_SERVER_LOG_LEVEL = /UpdateServerLogLevel\s*\|\s*Updating\s+logging\s+level\s+for\s+(\w+)\s+to:\s*'([^']+)'/i;
 const RE_UPDATE_CAMERA_LOG_LEVEL = /UpdateCameraLogLevel\s*\|\s*Updating\s+logging\s+level\s+for\s+camera\s+(\d+)\s+to:\s*'([^']+)'/i;
@@ -143,6 +144,8 @@ export interface ConnectivityFindings {
   sessionFailureCount: number;
   /** Request delivery failures (broader than No message dispatcher) */
   deliveryFailureCount: number;
+  /** Service start failures with ERROR_SERVICE_ALREADY_RUNNING (0x420) -- stale/crash-looping services */
+  serviceAlreadyRunningCount: number;
   /** Log level for the IS process (last declared level) */
   isLogLevel: LogLevelInfo | null;
   /** Log level for the AE/client process (last declared level) */
@@ -186,6 +189,7 @@ export async function scanConnectivity(
     dnsFailures: new Map(),
     sessionFailureCount: 0,
     deliveryFailureCount: 0,
+    serviceAlreadyRunningCount: 0,
     isLogLevel: null,
     aeLogLevel: null,
     serverLogLevels: new Map(),
@@ -380,6 +384,11 @@ export async function scanConnectivity(
       // Request delivery failure — broader connectivity issue
       if (RE_DELIVERY_FAILURE.test(msg)) {
         findings.deliveryFailureCount++;
+      }
+
+      // ERROR_SERVICE_ALREADY_RUNNING (0x420) -- stale service blocking restart
+      if (RE_SERVICE_ALREADY_RUNNING.test(msg)) {
+        findings.serviceAlreadyRunningCount++;
       }
     }
   }
@@ -872,6 +881,16 @@ export async function toolTriage(
         category: "Connectivity",
         message: `${conn.deliveryFailureCount} request delivery failure(s)`,
         drillDown: "sym_search pattern='RequestFailedDelivery'",
+      });
+    }
+
+    // ERROR_SERVICE_ALREADY_RUNNING (0x420) -- stale service blocking restart
+    if (conn.serviceAlreadyRunningCount > 0) {
+      findings.push({
+        severity: "WARNING",
+        category: "Lifecycle",
+        message: `${conn.serviceAlreadyRunningCount} service start failure(s) with ERROR_SERVICE_ALREADY_RUNNING (0x420) — stale process blocking restart, likely crash-loop`,
+        drillDown: "sym_search pattern='Could not start service'",
       });
     }
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * triage.ts
  *
  * Automated first-pass diagnosis tool. Runs multiple analyses in parallel
@@ -96,6 +96,7 @@ const RE_DNS_FAILURE = /Unable\s+to\s+resolve\s+server\s+address\s+'([^']+)'/i;
 const RE_SESSION_FAILURE = /TokenNotFoundException|InvalidSession(?:Exception|ID)|Seer\.Exceptions\.InvalidSessionException/i;
 const RE_DELIVERY_FAILURE = /RequestFailedDelivery|Could\s+not\s+retrieve\s+result/i;
 const RE_SERVICE_ALREADY_RUNNING = /Could\s+not\s+start\s+service.*(?:0x420|00000420|ERROR_SERVICE_ALREADY_RUNNING)/i;
+const RE_TRACKER_SERVICE_START = /Successfully\s+started\s+service\s+'AI\s+Tracker\s+(\d+)'/i;
 const RE_LOG_LEVEL_CHANGED = /Logging\s+level\s+changed\s+to:\s*(.+)/i;
 const RE_UPDATE_SERVER_LOG_LEVEL = /UpdateServerLogLevel\s*\|\s*Updating\s+logging\s+level\s+for\s+(\w+)\s+to:\s*'([^']+)'/i;
 const RE_UPDATE_CAMERA_LOG_LEVEL = /UpdateCameraLogLevel\s*\|\s*Updating\s+logging\s+level\s+for\s+camera\s+(\d+)\s+to:\s*'([^']+)'/i;
@@ -146,6 +147,8 @@ export interface ConnectivityFindings {
   deliveryFailureCount: number;
   /** Service start failures with ERROR_SERVICE_ALREADY_RUNNING (0x420) -- stale/crash-looping services */
   serviceAlreadyRunningCount: number;
+  /** Tracker service restarts detected from IS logs: cameraId → restart count */
+  trackerServiceRestarts: Map<string, number>;
   /** Log level for the IS process (last declared level) */
   isLogLevel: LogLevelInfo | null;
   /** Log level for the AE/client process (last declared level) */
@@ -190,6 +193,7 @@ export async function scanConnectivity(
     sessionFailureCount: 0,
     deliveryFailureCount: 0,
     serviceAlreadyRunningCount: 0,
+    trackerServiceRestarts: new Map(),
     isLogLevel: null,
     aeLogLevel: null,
     serverLogLevels: new Map(),
@@ -389,6 +393,13 @@ export async function scanConnectivity(
       // ERROR_SERVICE_ALREADY_RUNNING (0x420) -- stale service blocking restart
       if (RE_SERVICE_ALREADY_RUNNING.test(msg)) {
         findings.serviceAlreadyRunningCount++;
+      }
+
+      // Tracker service successfully started — indicates restart
+      const trkMatch = RE_TRACKER_SERVICE_START.exec(msg);
+      if (trkMatch) {
+        const camId = trkMatch[1];
+        findings.trackerServiceRestarts.set(camId, (findings.trackerServiceRestarts.get(camId) ?? 0) + 1);
       }
     }
   }
@@ -917,6 +928,29 @@ export async function toolTriage(
           drillDown: "sym_search pattern='Logging level changed'",
         });
       }
+
+    // Tracker crash-loop detection from IS logs (when sccp files are unavailable)
+    if (conn.trackerServiceRestarts.size > 0) {
+      const totalTrackerRestarts = [...conn.trackerServiceRestarts.values()].reduce((s, n) => s + n, 0);
+      const crashLooping = [...conn.trackerServiceRestarts.entries()].filter(([, n]) => n >= 3);
+      if (crashLooping.length > 0) {
+        const ids = crashLooping.map(([id]) => id);
+        const names = summarizeProcessNames(ids.map(id => `Tracker(${id})`));
+        findings.push({
+          severity: "CRITICAL",
+          category: "Health",
+          message: `Tracker crash-loop detected from IS logs: ${names} — ${totalTrackerRestarts} total restart(s) across ${conn.trackerServiceRestarts.size} Tracker(s)`,
+          drillDown: "sym_lifecycle mode=processes",
+        });
+      } else if (totalTrackerRestarts > 5) {
+        findings.push({
+          severity: "WARNING",
+          category: "Health",
+          message: `${totalTrackerRestarts} Tracker restart(s) detected from IS logs across ${conn.trackerServiceRestarts.size} Tracker(s)`,
+          drillDown: "sym_lifecycle mode=processes",
+        });
+      }
+    }
     }
     if (isLevel?.hasDiagnostic) {
       findings.push({

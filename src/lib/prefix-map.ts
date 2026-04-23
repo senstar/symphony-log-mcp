@@ -126,6 +126,19 @@ const DYNAMIC_PREFIXES: Array<{
     }),
   },
   {
+    // stplayer______0, stplayer______1 — STPlayer (shared-texture inter-process video player)
+    // Underscores pad the player name to a fixed width. Log format is NON-STANDARD:
+    //   [HH:MM:SS.mmm] [I|W|E] message
+    // NOT the usual Symphony AILog format.
+    pattern: /^stplayer[_]*(\d+)$/,
+    describe: (m) => ({
+      description: `STPlayer instance ${m[1]} (shared-texture video player, client-side, 1 per panel)`,
+      category: "Video",
+      side: "client",
+      notes: "Uses non-standard log format: [HH:MM:SS.mmm] [I|W|E] message. Requires alternate parser.",
+    }),
+  },
+  {
     // ae_8000 — AiraExplorer with port
     pattern: /^ae_(\d+)$/,
     describe: (m) => ({

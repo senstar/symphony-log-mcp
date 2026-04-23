@@ -108,6 +108,19 @@ const LEVEL_MAP: Record<string, LogLevel> = {
 const LINE_RE =
   /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+) <([^>]{8})> (.*)$/;
 
+/**
+ * STPlayer log format: [HH:MM:SS.mmm] [I|W|E] message
+ * Used by the shared-texture inter-process video player (stplayer).
+ */
+const STPLAYER_LINE_RE =
+  /^\[(\d{2}:\d{2}:\d{2}\.\d{3})\] \[([IWE])\] (.*)$/;
+
+const STPLAYER_LEVEL_MAP: Record<string, LogLevel> = {
+  "I": "BasicInfo",
+  "W": "Diagnostic",
+  "E": "Error",
+};
+
 /** Regex for "took HH:MM:SS.fffffff" request duration pattern */
 const TOOK_RE = /took (\d{2}):(\d{2}):(\d{2})\.(\d+)/;
 
@@ -204,6 +217,42 @@ export function parseLogLine(raw: string, lineNumber: number): LogLine | null {
   };
 }
 
+/**
+ * Parse a STPlayer log line: [HH:MM:SS.mmm] [I|W|E] message
+ * Returns null if the line doesn't match the STPlayer format.
+ */
+export function parseStPlayerLogLine(raw: string, lineNumber: number): LogLine | null {
+  const m = STPLAYER_LINE_RE.exec(raw);
+  if (!m) return null;
+
+  const [, timestamp, levelChar, message] = m;
+  const level: LogLevel = STPLAYER_LEVEL_MAP[levelChar] ?? "Unknown";
+  const timestampMs = timestampToMs(timestamp);
+
+  // Extract source from GStreamer-style embedded messages:
+  // "0:00:16.216... 58168 ... stplayer GstSharedTextureMediaPlayer.cpp:1049:..."
+  let source = "stplayer";
+  let sourceContext = "";
+  const gstMatch = /(\w+\.cpp:\d+:\S+)/.exec(message);
+  if (gstMatch) {
+    source = gstMatch[1];
+  }
+
+  return {
+    lineNumber,
+    timestamp,
+    timestampMs,
+    threadId: "0",
+    level,
+    rawLevel: levelChar,
+    functionalArea: "STPlayer",
+    source,
+    sourceContext,
+    message,
+    raw,
+  };
+}
+
 /** Parse raw text lines into LogEntry objects (line + continuation lines).
  *  Detects midnight rollover: if a timestamp jumps backward by >20 hours,
  *  subsequent entries get a +24h offset on timestampMs so sorting stays correct.
@@ -227,8 +276,8 @@ export function parseLogEntries(rawLines: string[]): LogEntry[] & { parseFailure
       continue;
     }
 
-    // Attempt to parse as a new log line
-    const parsed = parseLogLine(raw, i + 1);
+    // Attempt to parse as a new log line (try standard format, then STPlayer format)
+    const parsed = parseLogLine(raw, i + 1) ?? parseStPlayerLogLine(raw, i + 1);
     if (parsed) {
       // Midnight rollover detection: if raw timestamp drops by >20 hours,
       // we've crossed midnight — add a day offset.

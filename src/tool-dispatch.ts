@@ -8,7 +8,7 @@ import type { LogContext } from "./types.js";
 
 import { toolTriage } from "./tools/triage.js";
 import { toolListLogFiles } from "./tools/list-logs.js";
-import { toolSearchErrors } from "./tools/search-errors.js";
+import { toolSearchErrors, toolSearchErrorsByPrefix } from "./tools/search-errors.js";
 import { toolSearchPattern, toolSearchCount, toolSearchAssertAbsent } from "./tools/search-pattern.js";
 import { toolGetStackTraces } from "./tools/stack-traces.js";
 import { toolGetServiceLifecycle, toolDetectLogGaps } from "./tools/service-lifecycle.js";
@@ -175,6 +175,13 @@ export async function dispatchToolCall(
           levelFilter:   a.levelFilter   as string[] | undefined,
           startTime:     a.startTime     as string | undefined,
           endTime:       a.endTime       as string | undefined,
+          limit:         a.limit         as number | undefined,
+        });
+      } else if (mode === "errors_by_prefix") {
+        return await toolSearchErrorsByPrefix(ctx.dirs, {
+          startTime:     a.startTime     as string | undefined,
+          endTime:       a.endTime       as string | undefined,
+          includeStacks: a.includeStacks as boolean | undefined,
           limit:         a.limit         as number | undefined,
         });
       }

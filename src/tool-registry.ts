@@ -52,11 +52,11 @@ const TOOL_DEFS: any[] = [
   },
   {
     name: "sym_search",
-    description: "Search logs for errors, text, or regex patterns. Modes: errors (deduplicated), pattern (text/regex), count (per-file totals), assert_absent (prove pattern missing).",
+    description: "Search logs for errors, text, or regex patterns. Modes: errors (deduplicated), pattern (text/regex), count (per-file totals), assert_absent (prove pattern missing), errors_by_prefix (batch all prefixes, no files needed).",
     inputSchema: {
       type: "object",
       properties: {
-        mode:          { type: "string", enum: ["errors", "pattern", "count", "assert_absent"], description: "Search mode" },
+        mode:          { type: "string", enum: ["errors", "pattern", "count", "assert_absent", "errors_by_prefix"], description: "Search mode. errors_by_prefix: batch scan all prefixes in one call" },
         files:         { type: "array", items: { type: "string" }, description: "Log filenames, prefixes, or prefix-date patterns" },
         pattern:       { type: "string", description: "For pattern/count/assert_absent: text or regex to search for" },
         isRegex:       { type: "boolean", description: "For pattern/count/assert_absent: treat pattern as regex (default false)" },

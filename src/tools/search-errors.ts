@@ -127,3 +127,78 @@ export async function toolSearchErrors(
   if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }
+
+
+export interface ErrorsByPrefixArgs {
+  startTime?: string;
+  endTime?: string;
+  includeStacks?: boolean;
+  limit?: number;
+}
+
+/**
+ * Batch error search across ALL active log prefixes in a single call.
+ * Returns a per-prefix summary so the agent can see all errors at once
+ * instead of making N separate sym_search calls.
+ */
+export async function toolSearchErrorsByPrefix(
+  logDir: string | string[],
+  args: ErrorsByPrefixArgs
+): Promise<string> {
+  const { listLogFiles } = await import("../lib/log-reader.js");
+  const dirs = Array.isArray(logDir) ? logDir : [logDir];
+  const allFiles = await listLogFiles(dirs);
+
+  // Discover unique prefixes
+  const prefixes = [...new Set(allFiles.map(f => f.prefix))].sort();
+  if (prefixes.length === 0)
+    return "No log files found in active directory.";
+
+  const includeStacks = args.includeStacks ?? false;
+  const limit = args.limit ?? 5;
+  const out: string[] = [`# Error Summary by Prefix (${prefixes.length} prefixes)`, ""];
+  let totalErrors = 0;
+  let prefixesWithErrors = 0;
+
+  for (const pfx of prefixes) {
+    const warnings: string[] = [];
+    const { groups } = await computeErrorGroups(logDir, {
+      files: [pfx],
+      deduplicate: true,
+      includeStacks,
+      startTime: args.startTime,
+      endTime: args.endTime,
+      limit,
+    }, warnings);
+
+    const sorted = [...groups.values()].sort((a, b) => b.count - a.count);
+    const errorCount = sorted.reduce((sum, g) => sum + g.count, 0);
+    totalErrors += errorCount;
+
+    if (sorted.length === 0) continue;
+    prefixesWithErrors++;
+
+    const shown = sorted.slice(0, limit);
+    out.push(`## ${pfx.toUpperCase()} — ${sorted.length} unique pattern(s), ${errorCount} total`);
+    for (const grp of shown) {
+      const f = grp.first.line;
+      out.push(`- **${grp.count}x** [${f.timestamp}–${grp.last.line.timestamp}] ${f.source}: ${f.message.slice(0, 200)}`);
+      if (includeStacks && grp.hasStack) {
+        const { extractStackTrace } = await import("../lib/log-parser.js");
+        const stack = extractStackTrace(grp.first);
+        if (stack) {
+          const frames = stack.split("\n").slice(1, 4);
+          for (const fr of frames) out.push(`    ${fr.trim()}`);
+        }
+      }
+    }
+    if (sorted.length > limit)
+      out.push(`  … and ${sorted.length - limit} more pattern(s)`);
+    out.push("");
+  }
+
+  out.unshift(""); // spacing after header
+  out.splice(2, 0, `**${prefixesWithErrors}/${prefixes.length} prefixes** have errors. **${totalErrors} total errors.**`, "");
+
+  return out.join("\n");
+}

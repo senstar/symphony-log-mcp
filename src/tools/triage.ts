@@ -557,6 +557,19 @@ export async function toolTriage(
       });
     }
 
+    // VA pressure detection
+    const vaWarnings = h.processRows.filter(r => r.minFreeVA > 0 && r.minFreeVA < 200);
+    if (vaWarnings.length > 0) {
+      const critical = vaWarnings.filter(r => r.minFreeVA < 100);
+      const names = vaWarnings.map(r => r.name + " (" + r.minFreeVA + " MB)").join(", ");
+      findings.push({
+        severity: critical.length > 0 ? "CRITICAL" : "WARNING",
+        category: "Health",
+        message: "VA space pressure: " + names,
+        drillDown: "sym_lifecycle mode=processes",
+      });
+    }
+
     // Overall health rating
     let health: string;
     if (h.crashLoopCount > 0 || h.totalRestarts >= 5) {

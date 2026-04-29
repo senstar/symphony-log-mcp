@@ -27,7 +27,7 @@ export async function computeHealthSummary(
   logDir: string | string[],
   args: SummarizeHealthArgs
 ): Promise<{
-  processRows: { name: string; restarts: number; pattern: string; peakMem: number; longestRunMins: number; longestRunSparse: boolean }[];
+  processRows: { name: string; restarts: number; pattern: string; peakMem: number; longestRunMins: number; longestRunSparse: boolean; minFreeVA: number }[];
   totalRestarts: number;
   crashLoopCount: number;
   errorCount: number;
@@ -81,7 +81,7 @@ export async function computeHealthSummary(
     byName.set(lt.name, list);
   }
 
-  const processRows: { name: string; restarts: number; pattern: string; peakMem: number; longestRunMins: number; longestRunSparse: boolean }[] = [];
+  const processRows: { name: string; restarts: number; pattern: string; peakMem: number; longestRunMins: number; longestRunSparse: boolean; minFreeVA: number }[] = [];
 
   for (const [name, instances] of byName) {
     const restarts = instances.filter(lt => lt.restartedAfter !== undefined).length;
@@ -119,7 +119,8 @@ export async function computeHealthSummary(
       if (runMins > longestRunMins) longestRunMins = runMins;
     }
 
-    processRows.push({ name, restarts, pattern, peakMem, longestRunMins, longestRunSparse });
+    const minVA = Math.min(...instances.map(lt => lt.minFreeVA).filter(v => v > 0));
+    processRows.push({ name, restarts, pattern, peakMem, longestRunMins, longestRunSparse, minFreeVA: isFinite(minVA) ? minVA : -1 });
   }
 
   processRows.sort((a, b) => b.restarts - a.restarts || a.name.localeCompare(b.name));
@@ -144,6 +145,7 @@ export async function computeHealthSummary(
           peakMem: 0,
           longestRunMins: 0,
           longestRunSparse: true,
+          minFreeVA: -1,
         });
       }
     }
@@ -270,6 +272,8 @@ interface TrendSnapshot {
   time: string;   // HH:MM:SS from log timestamp
   mem: number;    // MB
   cpu: number;    // %
+  freeVA: number;
+  maxFreeVA: number;
 }
 
 interface ProcessTrend {
@@ -284,9 +288,10 @@ interface ProcessTrend {
   peakCpu: number;
   growthPct: number;
   snapshotCount: number;
+  minFreeVA: number;
 }
 
-const SCCP_RE = /^\s*(.+?)\s+PID\(\s*(\d+)\s*\):\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+([\d.]+)\s+[\d.]+\s+(\d+)%\s+(\d{2}\/\d{2}\s+\d{2}:\d{2})/;
+const SCCP_RE = /^\s*(.+?)\s+PID\(\s*(\d+)\s*\):\s+\S+\s+\S+\s+\S+\s+\S+\s+(\S+)\s+(\S+)\s+([\d.]+)\s+[\d.]+\s+(\d+)%\s+(\d{2}\/\d{2}\s+\d{2}:\d{2})/;
 
 function normaliseTrendName(name: string): string {
   return name.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")").replace(/\s+/g, " ").trim();
@@ -328,8 +333,10 @@ export async function toolMemoryTrends(
 
       const snap: TrendSnapshot = {
         time: entry.line.timestamp,
-        mem: parseFloat(m[3]),
-        cpu: parseInt(m[4], 10),
+        mem: parseFloat(m[5]),
+        cpu: parseInt(m[6], 10),
+        freeVA: parseInt(m[3], 10) || 0,
+        maxFreeVA: parseInt(m[4], 10) || 0,
       };
 
       const list = byProcess.get(name) ?? [];
@@ -375,6 +382,8 @@ export async function toolMemoryTrends(
     if (!globalFirst || firstSnap.time < globalFirst) globalFirst = firstSnap.time;
     if (!globalLast || lastSnap.time > globalLast) globalLast = lastSnap.time;
 
+    let minFreeVA = -1;
+    for (const s of snaps) { if (s.freeVA > 0 && (minFreeVA < 0 || s.freeVA < minFreeVA)) minFreeVA = s.freeVA; }
     trends.push({
       name,
       firstSnapshot: firstSnap.time,
@@ -387,6 +396,7 @@ export async function toolMemoryTrends(
       peakCpu,
       growthPct,
       snapshotCount: snaps.length,
+      minFreeVA,
     });
   }
 

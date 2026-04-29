@@ -15,7 +15,7 @@
  * Log file rollover: 5 MB max per file (MAX_FILE_SIZE = 5000000).
  */
 
-import { tryReadLogEntries, resolveFileRefs, isInTimeWindow, appendWarnings } from "../lib/log-reader.js";
+import { readLogEntries, resolveFileRefs, isInTimeWindow } from "../lib/log-reader.js";
 import { isSymphonyProcess } from "../lib/symphony-patterns.js";
 import * as path from "path";
 
@@ -24,10 +24,12 @@ interface ProcessSnapshot {
   pid: number;
   mem: number;            // MB
   cpu: number;            // percent
+  freeVA: number;         // Free virtual address space (MB)
+  maxFreeVA: number;      // Largest contiguous free VA block (MB)
   processStart: string;   // "MM/DD HH:MM" from the record itself
 }
 
-interface ProcessLifetime {
+export interface ProcessLifetime {
   name: string;
   pid: number;
   startedAt: string;        // From the sccp start-time column
@@ -36,23 +38,30 @@ interface ProcessLifetime {
   maxMem: number;
   avgMem: number;
   maxCpu: number;
+  minFreeVA: number;      // Lowest free VA (MB)
+  minMaxFreeVA: number;   // Lowest max contiguous free VA (MB)
   restartedAfter?: string;  // Snapshot time of the previous PID's last appearance
 }
 
 /**
- * Parse a sccp process line from entry.line.message.
- * Format:  "  Name PID(  NNN):   T   H  U  G  FREE  MAXFREE  MEM.MM  PF.MM  CPU%  MM/DD  HH:MM  ..."
+ * Parse a sccp process line. Columns per CpuCounter.cpp printf:
+ *   Name PID(N): Thrd Hndl Usr GDI Free MaxFree Mem(MB) PF(MB) CPU% ...
  */
-function parseSccpLine(message: string): { name: string; pid: number; mem: number; cpu: number; processStart: string } | null {
-  // Match:  <name>  PID( <pid> ):  ... <mem.xx>   <pf.xx>   <cpu>%  <MM/DD>  <HH:MM>
-  const m = /^\s*(.+?)\s+PID\(\s*(\d+)\s*\):\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+([\d.]+)\s+[\d.]+\s+(\d+)%\s+(\d{2}\/\d{2}\s+\d{2}:\d{2})/.exec(message);
+export function parseSccpLine(message: string): {
+  name: string; pid: number; mem: number; cpu: number;
+  freeVA: number; maxFreeVA: number; processStart: string;
+} | null {
+  // Groups: 1=name 2=pid 3=Free 4=MaxFree 5=Mem 6=CPU% 7=start
+  const m = /^\s*(.+?)\s+PID\(\s*(\d+)\s*\):\s+\S+\s+\S+\s+\S+\s+\S+\s+(\S+)\s+(\S+)\s+([\d.]+)\s+[\d.]+\s+(\d+)%\s+(\d{2}\/\d{2}\s+\d{2}:\d{2})/.exec(message);
   if (!m) return null;
   return {
     name: m[1].trim(),
     pid: parseInt(m[2], 10),
-    mem: parseFloat(m[3]),
-    cpu: parseInt(m[4], 10),
-    processStart: m[5],
+    freeVA: parseInt(m[3], 10) || 0,
+    maxFreeVA: parseInt(m[4], 10) || 0,
+    mem: parseFloat(m[5]),
+    cpu: parseInt(m[6], 10),
+    processStart: m[7],
   };
 }
 
@@ -82,18 +91,18 @@ export interface ProcessLifetimesArgs {
 /** Compute raw process lifetime records from sccp logs. */
 export async function computeProcessLifetimes(
   logDir: string | string[],
-  args: ProcessLifetimesArgs,
-  warnings?: string[],
+  args: ProcessLifetimesArgs
 ): Promise<{ lifetimes: ProcessLifetime[]; processCount: number }> {
   const symphonyOnly = args.symphonyOnly ?? true;
 
   const byProcess = new Map<string, Map<number, ProcessSnapshot[]>>();
   const paths = await resolveFileRefs(args.files, logDir);
-  const warn = warnings ?? [];
 
   for (const fullPath of paths) {
-    const entries = await tryReadLogEntries(fullPath, warn);
-    if (!entries) continue;
+    let entries;
+    try {
+      entries = await readLogEntries(fullPath);
+    } catch { continue; }
 
     for (const entry of entries) {
       if (!isInTimeWindow(entry.line.timestamp, args.startTime, args.endTime)) continue;
@@ -115,6 +124,8 @@ export async function computeProcessLifetimes(
         pid: parsed.pid,
         mem: parsed.mem,
         cpu: parsed.cpu,
+        freeVA: parsed.freeVA,
+        maxFreeVA: parsed.maxFreeVA,
         processStart: parsed.processStart,
       });
     }
@@ -129,6 +140,8 @@ export async function computeProcessLifetimes(
       const [pid, snaps] = pidList[i];
       const mems = snaps.map(s => s.mem);
       const cpus = snaps.map(s => s.cpu);
+      const freeVAs = snaps.map(s => s.freeVA).filter(v => v > 0);
+      const maxFreeVAs = snaps.map(s => s.maxFreeVA).filter(v => v > 0);
       const lt: ProcessLifetime = {
         name, pid,
         startedAt: snaps[0].processStart,
@@ -137,6 +150,8 @@ export async function computeProcessLifetimes(
         maxMem: Math.max(...mems),
         avgMem: mems.reduce((a, b) => a + b, 0) / mems.length,
         maxCpu: Math.max(...cpus),
+        minFreeVA: freeVAs.length > 0 ? Math.min(...freeVAs) : -1,
+        minMaxFreeVA: maxFreeVAs.length > 0 ? Math.min(...maxFreeVAs) : -1,
       };
       if (i > 0) {
         const prevSnaps = pidList[i - 1][1];
@@ -158,13 +173,12 @@ export async function toolGetProcessLifetimes(
 
   const paths = await resolveFileRefs(args.files, logDir);
   if (paths.length === 0) return "No sccp log files found.";
-  const warnings: string[] = [];
 
-  const { lifetimes, processCount: byProcessSize } = await computeProcessLifetimes(logDir, args, warnings);
+  const { lifetimes, processCount: byProcessSize } = await computeProcessLifetimes(logDir, args);
   const byProcess = { size: byProcessSize }; // keep reference count
 
   if (lifetimes.length === 0) {
-    return appendWarnings("No process records found. Make sure you are passing sccp-*.txt log files.", warnings);
+    return "No process records found. Make sure you are passing sccp-*.txt log files.";
   }
 
   // Compatibility shim — all subsequent code uses lifetimes directly
@@ -197,6 +211,11 @@ export async function toolGetProcessLifetimes(
       out.push(`  Previous PID last seen: ${lt.restartedAfter}`);
     }
     out.push(`  Memory:  avg ${lt.avgMem.toFixed(1)} MB  max ${lt.maxMem.toFixed(1)} MB   CPU max: ${lt.maxCpu}%`);
+    if (lt.minFreeVA > 0) {
+      const vaLevel = lt.minFreeVA < 100 ? "CRITICAL" : lt.minFreeVA < 200 ? "WARNING" : "";
+      const vaTag = vaLevel ? "  [" + vaLevel + "]" : "";
+      out.push("  VA space: free " + lt.minFreeVA + " MB  max-block " + lt.minMaxFreeVA + " MB" + vaTag);
+    }
     out.push("");
   }
 
@@ -212,7 +231,6 @@ export async function toolGetProcessLifetimes(
     }
   }
 
-  if (warnings.length > 0) { out.push(""); out.push(...warnings); }
   return out.join("\n");
 }
 

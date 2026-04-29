@@ -35,14 +35,15 @@ export const IS_LOG_CONTENT = [
 
 // ── SCCP log content (CPU/memory stats) ──
 export const SCCP_LOG_CONTENT = [
-  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tinfoservice.exe\tPID=1234 CPU=12.3% Mem=245,123K',
-  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tscheduler.exe\tPID=5678 CPU=5.1% Mem=112,456K',
-  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tTracker(1)\tPID=9012 CPU=25.0% Mem=523,000K',
-  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tae.exe\tPID=3456 CPU=3.2% Mem=198,000K',
-  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tchrome.exe\tPID=7890 CPU=8.5% Mem=345,000K',
-  '10:05:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tinfoservice.exe\tPID=1234 CPU=15.5% Mem=255,000K',
-  '10:05:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tscheduler.exe\tPID=5678 CPU=6.0% Mem=115,000K',
-  '10:05:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\tTracker(1)\tPID=9012 CPU=28.0% Mem=530,000K',
+  // CpuCounter.cpp format: Name PID(N): Thrd Hndl Usr GDI Free MaxFree Mem PF CPU% MM/DD HH:MM UserTime KernelTime
+  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t          infoservice.exe PID(   1234):   242   6396     1     3        546       112  1750.96  1556.46   12% 04/17 19:40  0023:23:00  0002:45:36',
+  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t            scheduler.exe PID(   5678):    85    890     0     2       1200       800   112.45   100.22    5% 04/17 19:40  0010:15:00  0001:30:00',
+  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t              Tracker(   1) PID(   9012):   120   2100     3     5        180        90   523.00   480.50   25% 04/17 19:42  0005:00:00  0000:45:00',
+  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t                   ae.exe PID(   3456):    60    450     0     1        800       400   198.00   180.00    3% 04/17 19:40  0008:00:00  0001:00:00',
+  '10:00:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t               chrome.exe PID(   7890):   200   3500     2     8       1500      1000   345.00   290.00    8% 04/17 19:38  0012:00:00  0003:00:00',
+  '10:05:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t          infoservice.exe PID(   1234):   250   6500     1     3        500       100  1800.50  1600.00   15% 04/17 19:40  0023:28:00  0002:46:00',
+  '10:05:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t            scheduler.exe PID(   5678):    90    900     0     2       1150       780   115.00   102.00    6% 04/17 19:40  0010:20:00  0001:31:00',
+  '10:05:00.000       1 <BasicInf> CpuCounter\tCpuCounter.Report\t              Tracker(   1) PID(   9012):   125   2150     3     5         80        40   530.00   490.00   28% 04/17 19:42  0005:05:00  0000:46:00',
 ].join('\n');
 
 // ── HTTP request log lines ──
